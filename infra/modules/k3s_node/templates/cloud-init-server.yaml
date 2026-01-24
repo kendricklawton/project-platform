@@ -1,0 +1,76 @@
+#cloud-config
+# 1. Provide DNS (Hetzner Private Networks do not provide resolvers via DHCP)
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+
+bootcmd:
+  - |
+    # 2. Wait for the private interface and set the NAT gateway route
+    GW="${nat_gateway_ip}"
+    MAX_RETRIES=30
+    for i in $(seq 1 $MAX_RETRIES); do
+      IFACE=$(ip -o -4 addr show | awk '/10\.0\./{print $2; exit}')
+      if [ -n "$IFACE" ]; then
+        ip route replace default via "$GW" dev "$IFACE"
+        break
+      fi
+      sleep 1
+    done
+
+hostname: ${hostname}
+manage_etc_hosts: true
+
+write_files:
+  - path: /etc/rancher/k3s/config.yaml
+    permissions: "0644"
+    content: |
+      token: ${k3s_token}
+      node-ip: __PRIVATE_IP__
+      flannel-backend: none
+      disable-network-policy: true
+      disable-cloud-controller: true
+      disable: [traefik, servicelb, local-storage]
+      kubelet-arg:
+        - "cloud-provider=external"
+        - "provider-id=hcloud://__HOSTNAME__"
+      ${k3s_cluster_setting}
+      tls-san:
+        - ${lb_ip}
+        - __TS_IP__
+      etcd-s3: true
+      etcd-s3-bucket: "${s3_bucket}"
+      etcd-s3-endpoint: "storage.googleapis.com"
+      etcd-s3-access-key: "${s3_access_key}"
+      etcd-s3-secret_key: "${s3_secret_key}"
+
+runcmd:
+  # 3. Join Tailscale (Already installed in Packer image)
+  - tailscale up --authkey=${tailscale_auth_server_key} --ssh --hostname=${hostname} --advertise-tags=tag:server --reset
+
+  # 4. Prepare Variables
+  - PRIVATE_IP=$(ip -o -4 addr show | awk '/10\.0\./{print $4; exit}' | cut -d/ -f1)
+  - TS_IP=$(tailscale ip -4 | head -n1)
+  - |
+    sed -i "s/__PRIVATE_IP__/$PRIVATE_IP/g" /etc/rancher/k3s/config.yaml
+    sed -i "s/__TS_IP__/$TS_IP/g" /etc/rancher/k3s/config.yaml
+    sed -i "s/__HOSTNAME__/${hostname}/g" /etc/rancher/k3s/config.yaml
+
+  # 5. Launch K3s (Binary already in Packer image)
+  - systemctl start k3s
+
+  # 6. Apply Manifests (HCCM and Cilium)
+  - mkdir -p /var/lib/rancher/k3s/server/manifests
+  - |
+    cat > /var/lib/rancher/k3s/server/manifests/hcloud-conf.yaml <<EOF
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: hcloud
+      namespace: kube-system
+    stringData:
+      token: "${hcloud_token}"
+      network: "${hcloud_network_name}"
+    EOF

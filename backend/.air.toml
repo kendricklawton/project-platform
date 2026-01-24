@@ -1,0 +1,34 @@
+# Config for Air (Live Reload)
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Just like your Taskfile command, but building a binary first
+  cmd = "go build -o ./tmp/main ./cmd/main.go"
+  # The binary to run (Refactored: 'bin' is deprecated, use 'entrypoint')
+  entrypoint = "./tmp/main"
+  # Watch these extensions
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  # Ignore these directories
+  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
+  # Delay to prevent rapid rebuilding
+  delay = 1000
+  # Stop on error?
+  stop_on_error = true
+  # Send Log output to stdout
+  log = "air_errors.log"
+
+[log]
+  # Show timestamps
+  time = true
+
+[color]
+  # Customize colors
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  # Delete tmp directory on exit
+  clean_on_exit = true

@@ -1,0 +1,162 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  TF_DIR: "infra"
+  PACKER_DIR: "packer"
+  CLOUD_ENV: '{{.CLOUD_ENV | default "dev"}}'
+  KUBECONFIG_PATH: ".kube/config"
+  IMAGE_VERSION: '{{.IMAGE_VERSION | default "v1"}}'
+
+  # Hardware Logic: Ensure build hardware matches deployment hardware
+  BUILD_SERVER_TYPE: '{{if eq .CLOUD_ENV "prod"}}cpx41{{else}}cpx21{{end}}'
+
+  # Command Wrapper: Exports GCP Auth for Terraform Backend (State)
+  TF_CMD: >-
+    export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/keys/gcp-tf-state-sa-{{.CLOUD_ENV}}.json" &&
+    terraform -chdir={{.TF_DIR}}
+
+  # Standard Variables: Passed to Terraform from your .env
+  TF_VARS: >-
+    -var="cloud_env={{.CLOUD_ENV}}"
+    -var="image_version={{.IMAGE_VERSION}}"
+    -var="gcp_project_id={{.GCP_PROJECT_ID}}"
+    -var="project_name={{.PROJECT_NAME}}"
+    -var="hcloud_token={{.HCLOUD_TOKEN}}"
+    -var="ssh_key_name={{.SSH_KEY_NAME}}"
+    -var="tailscale_auth_nat_key={{.TAILSCALE_AUTH_NAT_KEY}}"
+    -var="tailscale_auth_server_key={{.TAILSCALE_AUTH_SERVER_KEY}}"
+    -var="tailscale_auth_agent_key={{.TAILSCALE_AUTH_AGENT_KEY}}"
+
+tasks:
+  setup:
+    desc: "Complete HA Zero Trust K3s Setup (Automated)"
+    cmds:
+      - task: packer:build
+      - task: infra:apply
+      - echo "⏳ Waiting for Tailscale MagicDNS..." && sleep 60
+      - task: infra:kubeconfig
+      - task: verify
+
+  packer:build:
+    desc: "Build Golden Images (Version: {{.IMAGE_VERSION}}) - (Server Type: {{.BUILD_SERVER_TYPE}})"
+    cmds:
+      - packer init {{.PACKER_DIR}}
+      - >-
+        packer build
+        -var "hcloud_token={{.HCLOUD_TOKEN}}"
+        -var "location=ash"
+        -var "server_type={{.BUILD_SERVER_TYPE}}"
+        {{.PACKER_DIR}}/ubuntu-k3s.pkr.hcl
+      - >-
+        packer build
+        -var "hcloud_token={{.HCLOUD_TOKEN}}"
+        -var "location=hil"
+        -var "server_type={{.BUILD_SERVER_TYPE}}"
+        {{.PACKER_DIR}}/ubuntu-k3s.pkr.hcl
+
+  infra:plan:a:
+    desc: "1. Build Images -> 2. Show Terraform Plan (Injects Manual Keys)"
+    run: always
+    cmds:
+      - task: packer:build
+      - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
+      - |
+        # Determine Environment (DEV or PROD)
+        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
+
+        # Select the correct manual keys from .env
+        BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
+        ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
+        SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
+
+        # Run Plan with injected secrets
+        {{.TF_CMD}} plan {{.TF_VARS}} \
+          -var="etcd_s3_bucket=${!BUCKET_VAR}" \
+          -var="etcd_s3_access_key=${!ACCESS_VAR}" \
+          -var="etcd_s3_secret_key=${!SECRET_VAR}"
+    sources:
+      - "{{.TF_DIR}}/**/*.tf"
+      - "{{.PACKER_DIR}}/*.hcl"
+
+  infra:plan:b:
+    desc: "Show Terraform Plan (Injects Manual Keys) - Skips Packer Build"
+    run: always
+    cmds:
+      - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
+      - |
+        # Determine Environment (DEV or PROD)
+        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
+
+        # Select the correct manual keys from .env
+        BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
+        ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
+        SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
+
+        # Run Plan with injected secrets
+        {{.TF_CMD}} plan {{.TF_VARS}} \
+          -var="etcd_s3_bucket=${!BUCKET_VAR}" \
+          -var="etcd_s3_access_key=${!ACCESS_VAR}" \
+          -var="etcd_s3_secret_key=${!SECRET_VAR}"
+    sources:
+      - "{{.TF_DIR}}/**/*.tf"
+
+  infra:apply:
+    desc: "Apply Terraform changes (API LB, VNet, HA Nodes)"
+    prompt: "⚠️  Review the plan above. Proceed with applying infrastructure changes?"
+    cmds:
+      - |
+        # 1. Determine Environment
+        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
+
+        # 2. Lookup Keys
+        BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
+        ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
+        SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
+
+        # 3. Apply
+        {{.TF_CMD}} apply -auto-approve {{.TF_VARS}} \
+          -var="etcd_s3_bucket=${!BUCKET_VAR}" \
+          -var="etcd_s3_access_key=${!ACCESS_VAR}" \
+          -var="etcd_s3_secret_key=${!SECRET_VAR}"
+
+  infra:kubeconfig:
+    desc: "Securely fetch Kubeconfig via Tailscale MagicDNS"
+    vars:
+      # Matches Terraform naming: dev-project-server-0
+      MASTER: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-0"
+    cmds:
+      - mkdir -p .kube
+      - scp -o StrictHostKeyChecking=no root@{{.MASTER}}:/etc/rancher/k3s/k3s.yaml {{.KUBECONFIG_PATH}}
+      - |
+        LB_IP=$({{.TF_CMD}} output -raw lb_public_ip)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '' "s/127.0.0.1/$LB_IP/g" {{.KUBECONFIG_PATH}}
+        else
+          sed -i "s/127.0.0.1/$LB_IP/g" {{.KUBECONFIG_PATH}}
+        fi
+      - echo "✅ Secured context for master {{.MASTER}} via Public LB $LB_IP"
+
+  infra:verify:
+    desc: "Verify cluster node status and CNI health"
+    cmds:
+      - kubectl get nodes
+      - kubectl -n kube-system exec daemonset/cilium -- cilium status
+
+  infra:down:
+    desc: "Destroy the HA cluster (Backups are SAFE)"
+    prompt: "⚠️  Destroy all infrastructure? This cannot be undone."
+    cmds:
+      - |
+        # Logic needed for destroy in case providers need auth to clean up
+        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
+        BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
+        ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
+        SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
+
+        {{.TF_CMD}} destroy -auto-approve {{.TF_VARS}} \
+          -var="etcd_s3_bucket=${!BUCKET_VAR}" \
+          -var="etcd_s3_access_key=${!ACCESS_VAR}" \
+          -var="etcd_s3_secret_key=${!SECRET_VAR}"
+      - rm -rf .kube

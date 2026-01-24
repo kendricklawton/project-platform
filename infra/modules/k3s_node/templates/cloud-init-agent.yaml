@@ -1,0 +1,34 @@
+#cloud-config
+manage_resolv_conf: true
+resolv_conf:
+  nameservers:
+    - "1.1.1.1"
+    - "8.8.8.8"
+
+bootcmd:
+  - |
+    GW="${nat_gateway_ip}"
+    MAX_RETRIES=30
+    for i in $(seq 1 $MAX_RETRIES); do
+      IFACE=$(ip -o -4 addr show | awk '/10\.0\./{print $2; exit}')
+      if [ -n "$IFACE" ]; then
+        ip route replace default via "$GW" dev "$IFACE"
+        break
+      fi
+      sleep 1
+    done
+
+hostname: ${hostname}
+manage_etc_hosts: true
+
+runcmd:
+  # 1. Join Tailscale
+  - tailscale up --authkey=${tailscale_auth_agent_key} --ssh --hostname=${hostname} --advertise-tags=tag:agent --reset
+
+  # 2. Join K3s Cluster
+  - PRIVATE_IP=$(ip -o -4 addr show | awk '/10\.0\./{print $4; exit}' | cut -d/ -f1)
+  - |
+    curl -sfL https://get.k3s.io | \
+      K3S_URL="https://${k3s_url}" \
+      K3S_TOKEN="${k3s_token}" \
+      sh -s - agent --node-ip="$PRIVATE_IP"
