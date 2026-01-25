@@ -31,13 +31,14 @@ vars:
 
 tasks:
   setup:
-    desc: "Complete HA Zero Trust K3s Setup (Automated)"
+    desc: "Complete HA Zero Trust K3s Setup (Automated with Cilium eBPF)"
     cmds:
       - task: packer:build
       - task: infra:apply
       - echo "⏳ Waiting for Tailscale MagicDNS..." && sleep 60
       - task: infra:kubeconfig
-      - task: verify
+      - task: cilium:install
+      - task: infra:verify
 
   packer:build:
     desc: "Build Golden Images (Version: {{.IMAGE_VERSION}}) - (Server Type: {{.BUILD_SERVER_TYPE}})"
@@ -58,20 +59,15 @@ tasks:
 
   infra:plan:a:
     desc: "1. Build Images -> 2. Show Terraform Plan (Injects Manual Keys)"
-    run: always
     cmds:
       - task: packer:build
       - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
       - |
-        # Determine Environment (DEV or PROD)
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-
-        # Select the correct manual keys from .env
         BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
         ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
         SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
 
-        # Run Plan with injected secrets
         {{.TF_CMD}} plan {{.TF_VARS}} \
           -var="etcd_s3_bucket=${!BUCKET_VAR}" \
           -var="etcd_s3_access_key=${!ACCESS_VAR}" \
@@ -82,19 +78,14 @@ tasks:
 
   infra:plan:b:
     desc: "Show Terraform Plan (Injects Manual Keys) - Skips Packer Build"
-    run: always
     cmds:
       - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
       - |
-        # Determine Environment (DEV or PROD)
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-
-        # Select the correct manual keys from .env
         BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
         ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
         SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
 
-        # Run Plan with injected secrets
         {{.TF_CMD}} plan {{.TF_VARS}} \
           -var="etcd_s3_bucket=${!BUCKET_VAR}" \
           -var="etcd_s3_access_key=${!ACCESS_VAR}" \
@@ -107,15 +98,11 @@ tasks:
     prompt: "⚠️  Review the plan above. Proceed with applying infrastructure changes?"
     cmds:
       - |
-        # 1. Determine Environment
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-
-        # 2. Lookup Keys
         BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
         ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"
         SECRET_VAR="ETCD_S3_SECRET_KEY_${ENV_UPPER}"
 
-        # 3. Apply
         {{.TF_CMD}} apply -auto-approve {{.TF_VARS}} \
           -var="etcd_s3_bucket=${!BUCKET_VAR}" \
           -var="etcd_s3_access_key=${!ACCESS_VAR}" \
@@ -124,7 +111,6 @@ tasks:
   infra:kubeconfig:
     desc: "Securely fetch Kubeconfig via Tailscale MagicDNS"
     vars:
-      # Matches Terraform naming: dev-project-server-0
       MASTER: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-0"
     cmds:
       - mkdir -p .kube
@@ -138,18 +124,50 @@ tasks:
         fi
       - echo "✅ Secured context for master {{.MASTER}} via Public LB $LB_IP"
 
+  cilium:install:
+    desc: "Install Cilium CNI (eBPF Mode) via local Helm"
+    cmds:
+      - helm repo add cilium https://helm.cilium.io/
+      - helm repo update
+      - |
+        helm upgrade --install cilium cilium/cilium --version 1.15.0 \
+          --namespace kube-system \
+          --set k8sServiceHost=10.0.1.254 \
+          --set k8sServicePort=6443 \
+          --set kubeProxyReplacement=true \
+          --set operator.replicas=1 \
+          --set ipam.mode=kubernetes \
+          --set tunnel=disabled \
+          --set autoDirectNodeRoutes=true \
+          --set ipv4NativeRoutingCIDR=10.0.0.0/16
+    env:
+      KUBECONFIG: "{{.KUBECONFIG_PATH}}"
+
   infra:verify:
     desc: "Verify cluster node status and CNI health"
     cmds:
       - kubectl get nodes
-      - kubectl -n kube-system exec daemonset/cilium -- cilium status
+      - echo "Checking Cilium Status..."
+      - kubectl -n kube-system exec ds/cilium -- cilium status --wait
+    env:
+      KUBECONFIG: "{{.KUBECONFIG_PATH}}"
+
+  infra:deploy:
+    desc: "Full Pipeline: Packer -> Plan -> Apply -> Cilium"
+    cmds:
+      - task: packer:build
+      - task: infra:plan:b
+      - task: infra:apply
+      - echo "⏳ Waiting for Tailscale MagicDNS..." && sleep 120
+      - task: infra:kubeconfig
+      - task: cilium:install
+      - task: infra:verify
 
   infra:down:
     desc: "Destroy the HA cluster (Backups are SAFE)"
     prompt: "⚠️  Destroy all infrastructure? This cannot be undone."
     cmds:
       - |
-        # Logic needed for destroy in case providers need auth to clean up
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
         BUCKET_VAR="ETCD_S3_BUCKET_${ENV_UPPER}"
         ACCESS_VAR="ETCD_S3_ACCESS_KEY_${ENV_UPPER}"

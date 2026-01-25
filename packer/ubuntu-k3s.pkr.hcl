@@ -35,9 +35,6 @@ source "hcloud" "k3s_base" {
   server_type   = var.server_type
   ssh_username  = "root"
 
-  # --- FIXED: STATIC NAMING ---
-  # Matches Terraform's expectation (e.g., k3s-base-ash-v1)
-  # NOTE: You must delete this snapshot in Hetzner UI to rebuild it!
   snapshot_name = "k3s-base-${var.location}-${var.image_version}"
 
   snapshot_labels = {
@@ -53,30 +50,46 @@ build {
     inline = [
       "export DEBIAN_FRONTEND=noninteractive",
       "apt-get update && apt-get upgrade -y",
+
+      # Install tools (including ufw) but DO NOT ENABLE FIREWALL yet
       "apt-get install -y ca-certificates curl python3 wireguard logrotate fail2ban open-iscsi ufw",
 
       # Install and enable Tailscale for Zero Trust access
       "curl -fsSL https://tailscale.com/install.sh | sh",
       "systemctl enable tailscaled",
+      "rm -f /var/lib/tailscale/tailscaled.state",
 
       # Pre-bake K3s binary to achieve faster 99.95% uptime recovery
       "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true sh -",
 
-      # --- ZERO TRUST FIREWALL CONFIG ---
+      # Disable systemd-resolved and configure direct DNS
+      "systemctl stop systemd-resolved",
+      "systemctl disable systemd-resolved",
+      "rm -f /etc/resolv.conf",
+      "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
+      "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
 
-      # 1. Deny all incoming traffic by default
-      "ufw default deny incoming",
+      # Create k3s-agent service unit (K3s installer only creates 'k3s' for server mode)
+      "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
+      "sed -i 's/k3s server/k3s agent/g' /etc/systemd/system/k3s-agent.service",
+      "systemctl daemon-reload",
 
-      # 2. Allow SSH ONLY via the Tailscale interface (VPN)
-      "ufw allow in on tailscale0 to any port 22 proto tcp",
+      # Sysctl tuning for K3s, Cilium eBPF, and container networking
+      "cat >> /etc/sysctl.d/99-k3s.conf <<EOF",
+      "net.ipv4.ip_forward = 1",
+      "net.ipv6.conf.all.forwarding = 1",
+      "net.bridge.bridge-nf-call-iptables = 1",
+      "net.bridge.bridge-nf-call-ip6tables = 1",
+      "fs.inotify.max_user_instances = 8192",
+      "fs.inotify.max_user_watches = 524288",
+      "EOF",
 
-      # 3. Allow Internal Cluster Traffic (Subnet ONLY)
-      # Replaced 'eth0' (which is Public Internet) with the Private Network CIDR
-      "ufw allow from 10.0.0.0/16 to any",
-
-      # 4. Enable Firewall
-      "ufw --force enable",
-      "apt-get clean"
+      # Cleanup for golden image
+      "apt-get clean",
+      "rm -rf /var/lib/apt/lists/*",
+      "cloud-init clean --logs --seed",
+      "rm -f /etc/machine-id /var/lib/dbus/machine-id",
+      "truncate -s 0 /etc/hostname"
     ]
   }
 }

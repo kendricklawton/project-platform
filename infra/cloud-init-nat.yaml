@@ -1,69 +1,59 @@
-# #cloud-config
-# package_update: true
-# packages:
-#   - iptables-persistent
-#   - curl
-#   - jq
-
-# runcmd:
-#   # 1. Enable IP Forwarding
-#   - sysctl -w net.ipv4.ip_forward=1
-#   - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-
-#   # 2. Setup Firewall Rules
-#   - iptables -F
-#   - iptables -t nat -F
-#   - iptables -P FORWARD ACCEPT
-#   - iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-#   - netfilter-persistent save
-#   - netfilter-persistent reload
-
-#   # 3. Install Tailscale
-#   - curl -fsSL https://tailscale.com/install.sh | sh
-
-#   # 4. Join Tailscale (Retry Loop + ZTA Tag)
-#   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
-#   - |
-#     NEXT_WAIT_TIME=0
-#     # Try to join for 60 seconds (12 attempts * 5s sleep)
-#     until tailscale up --authkey=${tailscale_auth_nat_key} \
-#       --ssh \
-#       --hostname=${hostname} \
-#       --advertise-tags=tag:nat \
-#       --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
-#     do
-#        echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
-#        sleep 5
-#        NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
-#     done
-
 #cloud-config
+hostname: ${hostname}
 package_update: true
+
+# 1. PREVENT INSTALL HANG (The only change: Answers "Yes" to prompts automatically)
+bootcmd:
+  - echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+  - echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+
 packages:
   - iptables-persistent
   - curl
   - jq
 
 runcmd:
-  # 1. Enable IP Forwarding
+  # 2. Disable UFW (Just to be safe)
+  - ufw disable
+
+  # 3. Enable IP Forwarding
   - sysctl -w net.ipv4.ip_forward=1
   - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
-  # 2. Setup NAT with MSS Clamping (Fixes MTU issues on Hetzner vNet)
-  - iptables -F
-  - iptables -t nat -F
-  - iptables -P FORWARD ACCEPT
-  - iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-  - iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-  - netfilter-persistent save
+  # 4. Setup Firewall Rules (Your Dynamic Detection Logic)
+  - |
+    # Find the interface carrying the default route (WAN)
+    WAN_IFACE=$(ip route show default | awk '{print $5}' | head -n1)
 
-  # 3. Install Tailscale (NAT uses stock Ubuntu image, not Packer)
+    # Fallback if detection fails
+    if [ -z "$WAN_IFACE" ]; then WAN_IFACE="eth0"; fi
+
+    echo "Detected WAN Interface: $WAN_IFACE"
+
+    iptables -F
+    iptables -t nat -F
+    iptables -P FORWARD ACCEPT
+
+    # Masquerade outbound traffic
+    iptables -t nat -A POSTROUTING -o "$WAN_IFACE" -j MASQUERADE
+
+    netfilter-persistent save
+    netfilter-persistent reload
+
+  # 5. Install Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
 
-  # 4. Join Tailscale
+  # 6. Join Tailscale (Your Retry Loop)
+  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
-    tailscale up --authkey=${tailscale_auth_nat_key} \
+    NEXT_WAIT_TIME=0
+    until tailscale up --authkey=${tailscale_auth_nat_key} \
       --ssh \
       --hostname=${hostname} \
       --advertise-tags=tag:nat \
-      --reset
+      --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+    do
+       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+       sleep 5
+       NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
+    done

@@ -6,6 +6,7 @@ terraform {
   }
 }
 
+# --- VARIABLES ---
 variable "name" { type = string }
 variable "location" { type = string }
 variable "server_type" { type = string }
@@ -16,22 +17,18 @@ variable "node_role" { type = string } # "server" | "agent" | "nat"
 variable "k3s_token" { type = string }
 variable "lb_ip" { type = string }
 variable "private_ip" { type = string } # New variable for static IP
-
 variable "image" {
   type    = string
   default = "ubuntu-24.04"
 }
-
 variable "k3s_init" {
   type    = bool
   default = false
 }
-
 variable "nat_gateway_ip" {
   type    = string
   default = "10.0.1.2"
 }
-
 variable "tailscale_auth_server_key" {
   type      = string
   sensitive = true

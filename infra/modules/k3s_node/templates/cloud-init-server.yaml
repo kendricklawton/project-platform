@@ -1,67 +1,77 @@
 #cloud-config
-# 1. Provide DNS (Hetzner Private Networks do not provide resolvers via DHCP)
-manage_resolv_conf: true
-resolv_conf:
-  nameservers:
-    - "1.1.1.1"
-    - "8.8.8.8"
-
-bootcmd:
-  - |
-    # 2. Wait for the private interface and set the NAT gateway route
-    GW="${nat_gateway_ip}"
-    MAX_RETRIES=30
-    for i in $(seq 1 $MAX_RETRIES); do
-      IFACE=$(ip -o -4 addr show | awk '/10\.0\./{print $2; exit}')
-      if [ -n "$IFACE" ]; then
-        ip route replace default via "$GW" dev "$IFACE"
-        break
-      fi
-      sleep 1
-    done
-
 hostname: ${hostname}
 manage_etc_hosts: true
 
-write_files:
-  - path: /etc/rancher/k3s/config.yaml
-    permissions: "0644"
-    content: |
-      token: ${k3s_token}
-      node-ip: __PRIVATE_IP__
-      flannel-backend: none
-      disable-network-policy: true
-      disable-cloud-controller: true
-      disable: [traefik, servicelb, local-storage]
-      kubelet-arg:
-        - "cloud-provider=external"
-        - "provider-id=hcloud://__HOSTNAME__"
-      ${k3s_cluster_setting}
-      tls-san:
-        - ${lb_ip}
-        - __TS_IP__
-      etcd-s3: true
-      etcd-s3-bucket: "${s3_bucket}"
-      etcd-s3-endpoint: "storage.googleapis.com"
-      etcd-s3-access-key: "${s3_access_key}"
-      etcd-s3-secret_key: "${s3_secret_key}"
+bootcmd:
+  # 1. Set up routing EARLY (before any network operations)
+  # Route via Hetzner SDN gateway (10.0.0.1) which forwards to NAT via hcloud_network_route
+  - ip route replace default via 10.0.0.1 dev enp7s0 || ip route add default via 10.0.0.1 dev enp7s0
 
 runcmd:
-  # 3. Join Tailscale (Already installed in Packer image)
-  - tailscale up --authkey=${tailscale_auth_server_key} --ssh --hostname=${hostname} --advertise-tags=tag:server --reset
+  # 1. Ensure routing is set (redundant but safe)
+  - ip route replace default via 10.0.0.1 dev enp7s0 || true
 
-  # 4. Prepare Variables
-  - PRIVATE_IP=$(ip -o -4 addr show | awk '/10\.0\./{print $4; exit}' | cut -d/ -f1)
-  - TS_IP=$(tailscale ip -4 | head -n1)
+  # 2. Fix DNS - disable systemd-resolved and use direct DNS
+  - systemctl stop systemd-resolved
+  - systemctl disable systemd-resolved
+  - rm -f /etc/resolv.conf
+  - echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  - echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+
+  # 3. Ensure tailscaled is running before attempting to join
+  - systemctl start tailscaled
+  - sleep 5
+
+  # 4. Join Tailscale
+  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
-    sed -i "s/__PRIVATE_IP__/$PRIVATE_IP/g" /etc/rancher/k3s/config.yaml
-    sed -i "s/__TS_IP__/$TS_IP/g" /etc/rancher/k3s/config.yaml
-    sed -i "s/__HOSTNAME__/${hostname}/g" /etc/rancher/k3s/config.yaml
+    RETRY_COUNT=0
+    until tailscale up --authkey=${tailscale_auth_server_key} \
+      --ssh \
+      --hostname=${hostname} \
+      --advertise-tags=tag:k3s-server \
+      --reset >> /var/log/tailscale-join.log 2>&1 || [ $RETRY_COUNT -eq 12 ];
+    do
+       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+       sleep 5
+       RETRY_COUNT=$((RETRY_COUNT+1))
+    done
 
-  # 5. Launch K3s (Binary already in Packer image)
+  # 5. Configure & Start K3s
+  - |
+    PRIVATE_IP=$(ip -o -4 addr show enp7s0 | awk '{print $4}' | cut -d/ -f1)
+    TS_IP=$(tailscale ip -4 | head -n1)
+
+    mkdir -p /etc/rancher/k3s
+
+    cat > /etc/rancher/k3s/config.yaml <<EOF
+    token: ${k3s_token}
+    ${k3s_cluster_setting}
+    disable:
+      - traefik
+      - servicelb
+    node-ip: $PRIVATE_IP
+    node-external-ip: $TS_IP
+    tls-san:
+      - ${hostname}
+      - $TS_IP
+      - ${lb_ip}
+    flannel-backend: none
+    disable-network-policy: true
+    etcd-s3: true
+    etcd-s3-endpoint: storage.googleapis.com
+    etcd-s3-access-key: ${s3_access_key}
+    etcd-s3-secret-key: ${s3_secret_key}
+    etcd-s3-bucket: ${s3_bucket}
+    etcd-snapshot-schedule-cron: "0 */6 * * *"
+    etcd-snapshot-retention: 5
+    EOF
+
+  # 6. Launch K3s
+  - systemctl enable k3s
   - systemctl start k3s
 
-  # 6. Apply Manifests (HCCM and Cilium)
+  # 7. Cloud Controller Manager
   - mkdir -p /var/lib/rancher/k3s/server/manifests
   - |
     cat > /var/lib/rancher/k3s/server/manifests/hcloud-conf.yaml <<EOF
