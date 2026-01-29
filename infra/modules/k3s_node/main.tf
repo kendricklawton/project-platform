@@ -13,22 +13,25 @@ variable "server_type" { type = string }
 variable "ssh_key_ids" { type = list(string) }
 variable "network_id" { type = string }
 variable "project_name" { type = string }
-variable "node_role" { type = string } # "server" | "agent" | "nat"
+variable "node_role" { type = string } # "server" | "agent"
 variable "k3s_token" { type = string }
-variable "lb_ip" { type = string }
-variable "private_ip" { type = string } # New variable for static IP
+variable "load_balancer_ip" { type = string }
+
+variable "private_ip" {
+  type    = string
+  default = null
+}
+
 variable "image" {
   type    = string
   default = "ubuntu-24.04"
 }
+
 variable "k3s_init" {
   type    = bool
   default = false
 }
-variable "nat_gateway_ip" {
-  type    = string
-  default = "10.0.1.2"
-}
+
 variable "tailscale_auth_server_key" {
   type      = string
   sensitive = true
@@ -36,12 +39,6 @@ variable "tailscale_auth_server_key" {
 }
 
 variable "tailscale_auth_agent_key" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "tailscale_auth_nat_key" {
   type      = string
   sensitive = true
   default   = ""
@@ -74,7 +71,7 @@ variable "s3_bucket" {
 }
 
 locals {
-  k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.lb_ip}:6443"
+  k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 }
 
 resource "hcloud_server" "node" {
@@ -102,9 +99,8 @@ resource "hcloud_server" "node" {
   user_data = (
     var.node_role == "server" ? templatefile("${path.module}/templates/cloud-init-server.yaml", {
       hostname                  = var.name
-      nat_gateway_ip            = var.nat_gateway_ip
       k3s_token                 = var.k3s_token
-      lb_ip                     = var.lb_ip
+      load_balancer_ip          = var.load_balancer_ip
       k3s_cluster_setting       = local.k3s_cluster_setting
       project_name              = var.project_name
       s3_access_key             = var.s3_access_key
@@ -114,14 +110,9 @@ resource "hcloud_server" "node" {
       hcloud_token              = var.hcloud_token
       hcloud_network_name       = var.hcloud_network_name
     }) :
-    var.node_role == "nat" ? templatefile("${path.module}/templates/cloud-init-nat.yaml", {
-      hostname               = var.name
-      tailscale_auth_nat_key = var.tailscale_auth_nat_key
-    }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
       hostname                 = var.name
-      nat_gateway_ip           = var.nat_gateway_ip
-      k3s_url                  = "${var.lb_ip}:6443"
+      k3s_url                  = "${var.load_balancer_ip}:6443"
       k3s_token                = var.k3s_token
       tailscale_auth_agent_key = var.tailscale_auth_agent_key
     })

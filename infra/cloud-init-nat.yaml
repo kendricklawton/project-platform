@@ -11,6 +11,7 @@ packages:
   - iptables-persistent
   - curl
   - jq
+  - fail2ban # <--- ADD THIS
 
 runcmd:
   # 2. Disable UFW (Just to be safe)
@@ -20,7 +21,13 @@ runcmd:
   - sysctl -w net.ipv4.ip_forward=1
   - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
-  # 4. Setup Firewall Rules (Your Dynamic Detection Logic)
+  # 4. Configure Fail2Ban (Optional but recommended)
+  # Ubuntu's default fail2ban config protects SSH automatically,
+  # but restarting it ensures it picks up the new environment.
+  - systemctl enable fail2ban
+  - systemctl restart fail2ban
+
+  # 5. Setup Firewall Rules (Your Dynamic Detection Logic)
   - |
     # Find the interface carrying the default route (WAN)
     WAN_IFACE=$(ip route show default | awk '{print $5}' | head -n1)
@@ -40,10 +47,10 @@ runcmd:
     netfilter-persistent save
     netfilter-persistent reload
 
-  # 5. Install Tailscale
+  # 6. Install Tailscale
   - curl -fsSL https://tailscale.com/install.sh | sh
 
-  # 6. Join Tailscale (Your Retry Loop)
+  # 7. Join Tailscale (Your Retry Loop)
   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
     NEXT_WAIT_TIME=0

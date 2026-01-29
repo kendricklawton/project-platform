@@ -1,0 +1,119 @@
+# Cilium Network Policies for K3s
+# Priority 1: Default Deny All + Essential Allow Rules
+#
+# Apply with: kubectl apply -f k8s/security/01-default-deny.yaml
+---
+# Default deny all ingress and egress traffic cluster-wide
+# All workloads must have explicit allow policies
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  description: "Default deny all ingress and egress traffic"
+  endpointSelector: {}
+  ingressDeny:
+    - fromEntities:
+        - all
+  egressDeny:
+    - toEntities:
+        - all
+---
+# Allow DNS resolution for all pods (essential for any network operation)
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  description: "Allow DNS queries to kube-dns/CoreDNS"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+---
+# Allow kubelet health probes (required for pod lifecycle)
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: allow-health-checks
+spec:
+  description: "Allow health checks from kubelet and nodes"
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - host
+        - remote-node
+---
+# Allow kube-system namespace full access (critical cluster components)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-kube-system
+  namespace: kube-system
+spec:
+  description: "Allow kube-system components to communicate"
+  endpointSelector: {}
+  ingress:
+    - fromEntities:
+        - cluster
+        - host
+  egress:
+    - toEntities:
+        - cluster
+        - host
+        - world
+---
+# Allow Cilium to communicate (CNI must function)
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-cilium-health
+  namespace: kube-system
+spec:
+  description: "Allow Cilium agent health and metrics"
+  endpointSelector:
+    matchLabels:
+      k8s-app: cilium
+  ingress:
+    - fromEntities:
+        - cluster
+        - host
+        - remote-node
+  egress:
+    - toEntities:
+        - cluster
+        - host
+        - remote-node
+        - world
+---
+# Allow Tailscale traffic (Zero Trust mesh connectivity)
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: allow-tailscale
+spec:
+  description: "Allow Tailscale coordination and mesh traffic"
+  endpointSelector: {}
+  egress:
+    - toEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "41641"
+              protocol: UDP
+    - toFQDNs:
+        - matchPattern: "*.tailscale.com"
+        - matchName: "controlplane.tailscale.com"
+        - matchName: "login.tailscale.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
