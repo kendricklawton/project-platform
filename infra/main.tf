@@ -17,27 +17,39 @@ terraform {
   }
 }
 
+# --- AUTH & SECRETS ---
 variable "hcloud_token" { sensitive = true }
-variable "api_load_balancer_ip" {
-  description = "Static internal IP for the API Server (Control Plane)"
-  default     = "10.0.1.254"
-}
 variable "tailscale_auth_nat_key" { sensitive = true }
 variable "tailscale_auth_k3s_server_key" { sensitive = true }
 variable "tailscale_auth_k3s_agent_key" { sensitive = true }
-variable "ssh_key_name" { type = string }
-variable "gcp_project_id" { type = string }
-variable "letsencrypt_email" { type = string }
-variable "cloud_env" { type = string }
+variable "etcd_s3_access_key" { sensitive = true }
+variable "etcd_s3_secret_key" { sensitive = true }
+
+# --- CONFIGURATION ---
 variable "project_name" { type = string }
+variable "cloud_env" { type = string }
+variable "ssh_key_name" { type = string }
+variable "letsencrypt_email" { type = string }
+variable "gcp_project_id" { type = string }
+variable "etcd_s3_bucket" { type = string }
+
 variable "image_version" { type = string }
 variable "hcloud_location" {
   type    = string
   default = "ash"
 }
-variable "etcd_s3_bucket" { type = string }
-variable "etcd_s3_access_key" { sensitive = true }
-variable "etcd_s3_secret_key" { sensitive = true }
+variable "api_load_balancer_ip" {
+  description = "Static internal IP for the API Server (Control Plane)"
+  default     = "10.0.1.254"
+}
+
+# COMPONENT VERSIONS
+variable "hcloud_ccm_version" { default = "1.29.1" }
+variable "hcloud_csi_version" { default = "2.6.0" }
+variable "cilium_version" { default = "1.15.1" }
+variable "ingress_nginx_version" { default = "4.10.0" }
+variable "cert_manager_version" { default = "v1.14.0" }
+variable "nats_version" { default = "1.2.4" }
 
 provider "hcloud" {
   token = var.hcloud_token
@@ -201,6 +213,7 @@ resource "random_password" "k3s_token" {
   special = false
 }
 
+# --- CONTROL PLANE INIT (Node 1) ---
 module "control_plane_init" {
   source                    = "./modules/k3s_node"
   cloud_env                 = var.cloud_env
@@ -223,6 +236,14 @@ module "control_plane_init" {
   s3_secret_key             = var.etcd_s3_secret_key
   s3_bucket                 = var.etcd_s3_bucket
 
+  # Versions
+  hcloud_ccm_version    = var.hcloud_ccm_version
+  hcloud_csi_version    = var.hcloud_csi_version
+  cilium_version        = var.cilium_version
+  ingress_nginx_version = var.ingress_nginx_version
+  cert_manager_version  = var.cert_manager_version
+  nats_version          = var.nats_version
+
   depends_on = [hcloud_network_route.default_route, time_sleep.wait_for_nat_config]
 }
 
@@ -238,6 +259,7 @@ resource "time_sleep" "wait_for_init_node" {
   create_duration = "120s"
 }
 
+# --- CONTROL PLANE JOIN (Nodes 2+) ---
 module "control_plane_join" {
   source                    = "./modules/k3s_node"
   count                     = local.env.master_count > 1 ? local.env.master_count - 1 : 0
@@ -260,7 +282,16 @@ module "control_plane_join" {
   s3_access_key             = var.etcd_s3_access_key
   s3_secret_key             = var.etcd_s3_secret_key
   s3_bucket                 = var.etcd_s3_bucket
-  depends_on                = [time_sleep.wait_for_init_node]
+
+  # Versions
+  hcloud_ccm_version    = var.hcloud_ccm_version
+  hcloud_csi_version    = var.hcloud_csi_version
+  cilium_version        = var.cilium_version
+  ingress_nginx_version = var.ingress_nginx_version
+  cert_manager_version  = var.cert_manager_version
+  nats_version          = var.nats_version
+
+  depends_on = [time_sleep.wait_for_init_node]
 }
 
 resource "hcloud_load_balancer_target" "api_targets_join" {
@@ -271,6 +302,7 @@ resource "hcloud_load_balancer_target" "api_targets_join" {
   use_private_ip   = true
 }
 
+# --- WORKER AGENTS ---
 module "worker_agents" {
   source                   = "./modules/k3s_node"
   count                    = local.env.worker_count
@@ -288,7 +320,8 @@ module "worker_agents" {
   tailscale_auth_agent_key = var.tailscale_auth_k3s_agent_key
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
-  depends_on               = [time_sleep.wait_for_init_node, module.control_plane_join]
+
+  depends_on = [time_sleep.wait_for_init_node, module.control_plane_join]
 }
 
 resource "hcloud_load_balancer_target" "ingress_targets" {
@@ -309,7 +342,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Kubelet API (Internal Only - needed for kubectl logs/exec)
+  # Kubelet API
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -317,7 +350,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # VXLAN / Flannel (Internal Only)
+  # VXLAN / Flannel
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -325,7 +358,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Cilium Health Checks (Internal Only)
+  # Cilium Health
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -333,7 +366,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Cilium VXLAN (Internal Only)
+  # Cilium VXLAN
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -341,7 +374,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # etcd (Internal Only - for HA control plane)
+  # etcd
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -349,7 +382,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # HTTP/HTTPS (Internal Only - LB forwards to these)
+  # HTTP/HTTPS
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -364,7 +397,7 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Tailscale UDP (Allow from anywhere for direct connections)
+  # Tailscale & WireGuard
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -372,7 +405,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
-  # WireGuard (Tailscale fallback)
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -384,21 +416,17 @@ resource "hcloud_firewall" "cluster_fw" {
 }
 
 output "api_endpoint" {
-  description = "Cluster Management Endpoint (Private)"
-  value       = var.api_load_balancer_ip
+  value = var.api_load_balancer_ip
 }
 
 output "public_ingress_ip" {
-  description = "POINT CLOUDFLARE HERE for your Users"
-  value       = hcloud_load_balancer.ingress.ipv4
+  value = hcloud_load_balancer.ingress.ipv4
 }
 
 output "control_plane_ids" {
-  description = "IDs of all control plane nodes"
-  value       = concat([module.control_plane_init.id], module.control_plane_join[*].id)
+  value = concat([module.control_plane_init.id], module.control_plane_join[*].id)
 }
 
 output "worker_ids" {
-  description = "IDs of all worker nodes"
-  value       = module.worker_agents[*].id
+  value = module.worker_agents[*].id
 }

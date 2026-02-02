@@ -61,21 +61,14 @@ source "hcloud" "hil" {
 build {
   sources = ["source.hcloud.ash", "source.hcloud.hil"]
 
-  # Upload the infra-bootstrap binary
-  provisioner "file" {
-    source      = "${path.root}/infra-bootstrap"
-    destination = "/usr/local/bin/infra-bootstrap"
-  }
-
   # Main Build Script
   provisioner "shell" {
     inline = [
-      "chmod +x /usr/local/bin/infra-bootstrap",
       "export DEBIAN_FRONTEND=noninteractive",
       "apt-get update && apt-get upgrade -y",
 
-      # Install Basic Tools
-      "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping",
+      # Install Basic Tools (Added 'jq' for JSON processing)
+      "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping jq",
 
       # Time Sync
       "systemctl enable systemd-timesyncd",
@@ -114,24 +107,13 @@ build {
       "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
       "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
 
-      # gVisor RuntimeClass Manifest
-      "mkdir -p /etc/rancher/k3s",
-      "mkdir -p /var/lib/rancher/k3s/server/manifests",
-      "cat > /var/lib/rancher/k3s/server/manifests/09-gvisor-runtimeclass.yaml <<EOF",
-      "apiVersion: node.k8s.io/v1",
-      "kind: RuntimeClass",
-      "metadata:",
-      "  name: gvisor",
-      "handler: runsc",
-      "EOF",
-
       # Prepare Service Units
-      # 1. Create Agent Service
+      # Create Agent Service from the Server template
       "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
       "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s agent|g' /etc/systemd/system/k3s-agent.service",
       "systemctl daemon-reload",
 
-      # Load br_netfilter
+      # Load br_netfilter (Required for K3s networking)
       "modprobe br_netfilter",
       "echo 'br_netfilter' > /etc/modules-load.d/k3s.conf",
 
@@ -147,9 +129,9 @@ build {
 
       "sysctl --system",
 
-      # Log Rotation & Limits (Size Based Protection)
-      "cat > /etc/logrotate.d/infra-bootstrap <<EOF",
-      "/var/log/infra-bootstrap.log",
+      # Log Rotation & Limits
+      # Removed infra-bootstrap.log; keeping tailscale-join.log
+      "cat > /etc/logrotate.d/k3s-bootstrap <<EOF",
       "/var/log/tailscale-join.log {",
       "    size 10M",
       "    rotate 5",
@@ -160,7 +142,7 @@ build {
       "}",
       "EOF",
 
-      # Keep Journald capped at 1GB (This protects the rest of the system)
+      # Keep Journald capped at 1GB (Protects disk space)
       "sed -i 's/#SystemMaxUse=/SystemMaxUse=1G/g' /etc/systemd/journald.conf",
       "sed -i 's/#SystemKeepFree=/SystemKeepFree=1G/g' /etc/systemd/journald.conf",
 

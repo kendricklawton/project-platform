@@ -2,8 +2,13 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
+# -----------------------------------------------------------------------------
+# WRITE FILES: HELPER SCRIPTS
+# -----------------------------------------------------------------------------
 write_files:
-  # --- gVisor Config ---
+  # 1. GVISOR CONFIGURATION
+  # Purpose: Injects the specific Containerd config required to run gVisor.
+  # This template handles the runtime_type registration.
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -16,39 +21,83 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
+  # 2. AGENT BOOTSTRAP LOGIC
+  # Purpose: Handles the Agent startup sequence:
+  # Wait for Network -> Config Gen -> Service Start
+  - path: /usr/local/bin/k3s-start.sh
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Phase 1: Network Identity
+      echo "--- [Bootstrap] 1. Waiting for Tailscale IP ---"
+      for i in {1..30}; do
+        TS_IP=$(tailscale ip -4 2>/dev/null)
+        if [ -n "$TS_IP" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$TS_IP" ]; then
+        echo "CRITICAL: Could not get Tailscale IP"
+        exit 1
+      fi
+      echo "Tailscale IP: $TS_IP"
+
+      # Phase 2: Configuration Generation
+      # Agents must point to the Load Balancer URL, not a specific master.
+      echo "--- [Bootstrap] 2. Generating K3s Config ---"
+      cat > /etc/rancher/k3s/config.yaml <<EOF
+      server: https://${k3s_url}
+      token: ${k3s_token}
+      node-ip: $(hostname -I | awk '{print $1}')
+      node-external-ip: $TS_IP
+      kubelet-arg:
+        - "cloud-provider=external"
+        - "container-log-max-files=3"
+        - "container-log-max-size=10Mi"
+      EOF
+
+      # Phase 3: Service Start
+      echo "--- [Bootstrap] 3. Starting K3s Agent ---"
+      systemctl enable k3s-agent
+      systemctl start k3s-agent
+      echo "=== Agent Bootstrap Complete ==="
+
+# -----------------------------------------------------------------------------
+# RUNCMD: EXECUTION ORDER
+# -----------------------------------------------------------------------------
 runcmd:
-  # 1. Time Sync
+  # 1. System: Time Sync
   - systemctl enable systemd-timesyncd
   - systemctl start systemd-timesyncd
   - timedatectl set-ntp true
 
-  # 2. CRITICAL FIX: Ensure Default Route Exists
+  # 2. Networking: Ensure Default Route
   - |
     sh -c '
-    echo "--- Verifying Default Route ---"
     CURRENT_ROUTE=$(ip route show default)
     if [ -z "$CURRENT_ROUTE" ]; then
       echo "No default route found. Adding via ${network_gateway}..."
       ip route add default via ${network_gateway}
-    else
-      echo "Default route exists: $CURRENT_ROUTE"
     fi
     '
 
-  # 3. Debug Network State
-  - echo "--- Network State Ready for Bootstrap ---"
-  - ip route
-  - ping -c 2 8.8.8.8 || echo "Connectivity Check Failed"
+  # 3. Connectivity: Tailscale Join
+  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
+  - |
+    NEXT_WAIT_TIME=0
+    until tailscale up --authkey=${tailscale_auth_agent_key} \
+      --ssh \
+      --hostname=${hostname} \
+      --advertise-tags="tag:k3s-agent" \
+      --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+    do
+       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+       sleep 5
+       NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
+    done
 
-  # 4. Run Bootstrap Binary
-  - echo "=== Starting Agent Node Bootstrap ==="
-  - >
-    /usr/local/bin/infra-bootstrap
-    --role agent
-    --hostname "${hostname}"
-    --cloud-env "${cloud_env}"
-    --k3s-token "${k3s_token}"
-    --k3s-url "${k3s_url}"
-    --tailscale-auth-key "${tailscale_auth_agent_key}"
-    --network-gateway "${network_gateway}" 2>&1 | tee -a /var/log/infra-bootstrap.log
-  - echo "=== Agent Node Bootstrap Complete ==="
+  # 4. Bootstrap: Execute Main Script
+  - /usr/local/bin/k3s-start.sh

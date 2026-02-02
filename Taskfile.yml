@@ -13,11 +13,11 @@ vars:
   BUILD_SERVER_TYPE: '{{if eq .CLOUD_ENV "prod"}}cpx41{{else}}cpx21{{end}}'
 
   # SOFTWARE VERSIONS (Single Source of Truth)
-  # These are injected into the Go Binary or Packer
+  # Used by Packer
   K3S_VERSION: "v1.29.1+k3s2"
   HELM_VERSION: "v3.14.2"
 
-  # Manifest Versions (Injected into Go)
+  # MANIFEST VERSIONS (Now passed to Terraform)
   HCLOUD_CCM_VERSION: "1.29.1"
   HCLOUD_CSI_VERSION: "2.6.0"
   CILIUM_VERSION: "1.15.1"
@@ -31,6 +31,7 @@ vars:
     terraform -chdir={{.TF_DIR}}
 
   # Variables passed to Terraform
+  # We now inject the versions here instead of into the Go binary
   TF_VARS: >-
     -var="cloud_env={{.CLOUD_ENV}}"
     -var="hcloud_location={{.HCLOUD_LOCATION}}"
@@ -43,6 +44,12 @@ vars:
     -var="tailscale_auth_k3s_server_key={{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
     -var="tailscale_auth_k3s_agent_key={{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
     -var="letsencrypt_email={{.LETSENCRYPT_EMAIL}}"
+    -var="hcloud_ccm_version={{.HCLOUD_CCM_VERSION}}"
+    -var="hcloud_csi_version={{.HCLOUD_CSI_VERSION}}"
+    -var="cilium_version={{.CILIUM_VERSION}}"
+    -var="ingress_nginx_version={{.INGRESS_NGINX_VERSION}}"
+    -var="cert_manager_version={{.CERT_MANAGER_VERSION}}"
+    -var="nats_version={{.NATS_VERSION}}"
 
 tasks:
   _tf_init:
@@ -51,33 +58,8 @@ tasks:
       - echo "🔧 Initializing {{.CLOUD_ENV}} state..."
       - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
 
-  test:bootstrap:
-    desc: "Run smoke tests for bootstrap binary"
-    dir: infra-bootstrap
-    cmds:
-      - go test -v .
-
-  build:bootstrap:
-    desc: "Build bootstrap binary with INJECTED VERSIONS"
-    deps: [test:bootstrap]
-    dir: infra-bootstrap
-    cmds:
-      # We use -ldflags to overwrite the variables in main.go at compile time
-      - >-
-        env GOOS=linux GOARCH=amd64 go build -o ../{{.PACKER_DIR}}/infra-bootstrap
-        -ldflags "
-        -X main.HcloudCCMVersion={{.HCLOUD_CCM_VERSION}}
-        -X main.HcloudCSIVersion={{.HCLOUD_CSI_VERSION}}
-        -X main.CiliumVersion={{.CILIUM_VERSION}}
-        -X main.IngressNginxVersion={{.INGRESS_NGINX_VERSION}}
-        -X main.CertManagerVersion={{.CERT_MANAGER_VERSION}}
-        -X main.NatsVersion={{.NATS_VERSION}}
-        "
-        .
-
   packer:build:
     desc: "Build Golden Images with PINNED K3s"
-    deps: [build:bootstrap]
     cmds:
       - packer init {{.PACKER_DIR}}
       - >-
@@ -90,7 +72,7 @@ tasks:
 
   infra:plan:
     desc: "Generate and show Terraform Plan"
-    deps: [_tf_init, test:bootstrap]
+    deps: [_tf_init]
     cmds:
       - |
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')

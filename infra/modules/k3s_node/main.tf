@@ -114,6 +114,28 @@ variable "nats_version" {
 
 locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
+
+  # 1. TEMPLATE THE FILES
+  # We read and template every file just like before, but store them in a local map.
+  manifest_files = {
+    "01-hcloud-secret.yaml"       = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
+    "02-hcloud-ccm.yaml"          = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
+    "03-hcloud-csi.yaml"          = templatefile("${path.module}/manifests/03-hcloud-csi.yaml", { HcloudCSIVersion = var.hcloud_csi_version })
+    "04-cilium.yaml"              = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version })
+    "05-ingress-nginx.yaml"       = templatefile("${path.module}/manifests/05-ingress-nginx.yaml", { IngressNginxVersion = var.ingress_nginx_version })
+    "06-nats.yaml"                = templatefile("${path.module}/manifests/06-nats.yaml", { NatsVersion = var.nats_version })
+    "07-cert-manager.yaml"        = templatefile("${path.module}/manifests/07-cert-manager.yaml", { CertManagerVersion = var.cert_manager_version })
+    "08-letsencrypt-issuer.yaml"  = templatefile("${path.module}/manifests/08-letsencrypt-issuer.yaml", { LetsEncryptEmail = var.letsencrypt_email })
+    "09-gvisor-runtimeclass.yaml" = file("${path.module}/manifests/09-gvisor-runtimeclass.yaml")
+  }
+
+  # 2. GENERATE THE INJECTOR SCRIPT
+  # This loops through the map above and creates a single Bash script string.
+  # Each line is: echo 'BASE64_CONTENT' | base64 -d > /path/to/file
+  manifest_injector_script = join("\n", [
+    for filename, content in local.manifest_files :
+    "echo '${base64encode(content)}' | base64 -d > /var/lib/rancher/k3s/server/manifests/${filename}"
+  ])
 }
 
 resource "hcloud_server" "node" {
@@ -141,27 +163,17 @@ resource "hcloud_server" "node" {
   user_data = (
     var.node_role == "server" ? templatefile("${path.module}/templates/cloud-init-server.yaml", {
       hostname                  = var.hostname
-      letsencrypt_email         = var.letsencrypt_email
       cloud_env                 = var.cloud_env
       k3s_token                 = var.k3s_token
       k3s_init                  = var.k3s_init
       load_balancer_ip          = var.load_balancer_ip
       k3s_cluster_setting       = local.k3s_cluster_setting
-      project_name              = var.project_name
       s3_access_key             = var.s3_access_key
       s3_secret_key             = var.s3_secret_key
       s3_bucket                 = var.s3_bucket
       tailscale_auth_server_key = var.tailscale_auth_server_key
-      hcloud_token              = var.hcloud_token
-      hcloud_network_name       = var.hcloud_network_name
-      location                  = var.location
-      hcloud_ccm_version        = var.hcloud_ccm_version
-      hcloud_csi_version        = var.hcloud_csi_version
-      cilium_version            = var.cilium_version
-      ingress_nginx_version     = var.ingress_nginx_version
-      cert_manager_version      = var.cert_manager_version
-      nats_version              = var.nats_version
       network_gateway           = var.network_gateway
+      manifest_injector_script  = local.manifest_injector_script
     }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
       hostname                 = var.hostname

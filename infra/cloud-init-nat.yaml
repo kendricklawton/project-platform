@@ -2,32 +2,44 @@
 hostname: ${hostname}
 package_update: true
 
-# 1. PREVENT INSTALL HANG (The only change: Answers "Yes" to prompts automatically)
+# -----------------------------------------------------------------------------
+# BOOTCMD: EARLY INITIALIZATION
+# -----------------------------------------------------------------------------
+# Purpose: Pre-seed debconf answers to prevent interactive prompts from hanging
+# the installation of iptables-persistent during the 'packages' phase.
 bootcmd:
   - echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
   - echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
 
+# -----------------------------------------------------------------------------
+# PACKAGES
+# -----------------------------------------------------------------------------
 packages:
-  - iptables-persistent
+  - iptables-persistent # Saves firewall rules across reboots
   - curl
   - jq
-  - fail2ban # <--- ADD THIS
+  - fail2ban # Protects SSH from brute force
 
+# -----------------------------------------------------------------------------
+# RUNCMD: EXECUTION ORDER
+# -----------------------------------------------------------------------------
 runcmd:
-  # 2. Disable UFW (Just to be safe)
+  # 1. Security: Disable UFW
+  # We use raw iptables for NAT; UFW can conflict with custom forwarding rules.
   - ufw disable
 
-  # 3. Enable IP Forwarding
+  # 2. Networking: Enable IP Forwarding
+  # Allows the kernel to pass traffic from one interface to another.
   - sysctl -w net.ipv4.ip_forward=1
   - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
-  # 4. Configure Fail2Ban (Optional but recommended)
-  # Ubuntu's default fail2ban config protects SSH automatically,
-  # but restarting it ensures it picks up the new environment.
+  # 3. Security: Configure Fail2Ban
+  # Restart to ensure it picks up the new environment/hostname.
   - systemctl enable fail2ban
   - systemctl restart fail2ban
 
-  # 5. Setup Firewall Rules (Your Dynamic Detection Logic)
+  # 4. Networking: Setup Firewall (NAT/Masquerade)
+  # Dynamic logic to find the WAN interface and enable masquerading.
   - |
     # Find the interface carrying the default route (WAN)
     WAN_IFACE=$(ip route show default | awk '{print $5}' | head -n1)
@@ -41,16 +53,21 @@ runcmd:
     iptables -t nat -F
     iptables -P FORWARD ACCEPT
 
-    # Masquerade outbound traffic
+    # Masquerade outbound traffic (The actual NAT rule)
     iptables -t nat -A POSTROUTING -o "$WAN_IFACE" -j MASQUERADE
 
+    # Persist the rules
     netfilter-persistent save
     netfilter-persistent reload
 
-  # 6. Install Tailscale
+  # 5. Software: Install Tailscale
+  # Unlike the K3s nodes (which use a Packer image), this is a vanilla image.
+  # We must install the software first.
   - curl -fsSL https://tailscale.com/install.sh | sh
 
-  # 7. Join Tailscale (Your Retry Loop)
+  # 6. Connectivity: Join Tailscale
+  # Since this is just a router, we don't need a separate script.
+  # Once 'tailscale up' runs, the node is fully functional.
   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
     NEXT_WAIT_TIME=0

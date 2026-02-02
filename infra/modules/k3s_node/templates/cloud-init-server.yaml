@@ -2,47 +2,153 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
+# -----------------------------------------------------------------------------
+# WRITE FILES: HELPER SCRIPTS
+# -----------------------------------------------------------------------------
+write_files:
+  # 1. MANIFEST INJECTOR SCRIPT
+  # Purpose: Decouples complex YAML generation from cloud-init.
+  # Terraform generates the 'manifest_injector_script' string (base64 encoded files),
+  # and we simply write it here to be executed later.
+  - path: /usr/local/bin/inject-manifests.sh
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+      echo "[Injector] creating manifest directory..."
+      mkdir -p /var/lib/rancher/k3s/server/manifests
+
+      echo "[Injector] writing manifest files..."
+      # Terraform Variable Injection:
+      ${indent(6, manifest_injector_script)}
+
+  # 2. SERVER BOOTSTRAP LOGIC
+  # Purpose: Handles the specific order of operations for a K3s Server:
+  # Wait for Network -> Config Gen -> Service Start -> Node Registration -> Taint Removal
+  - path: /usr/local/bin/k3s-start.sh
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Phase 1: File Setup
+      echo "--- [Bootstrap] 1. Injecting Kubernetes Manifests ---"
+      /usr/local/bin/inject-manifests.sh
+
+      # Phase 2: Network Identity
+      # We cannot generate the K3s config without our VPN IP.
+      echo "--- [Bootstrap] 2. Waiting for Tailscale IP ---"
+      for i in {1..30}; do
+        TS_IP=$(tailscale ip -4 2>/dev/null)
+        if [ -n "$TS_IP" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$TS_IP" ]; then
+        echo "CRITICAL: Could not get Tailscale IP. Exiting."
+        exit 1
+      fi
+      echo "Tailscale IP: $TS_IP"
+
+      # Phase 3: Configuration Generation
+      # We inject the Terraform variables here to create the final K3s config.
+      echo "--- [Bootstrap] 3. Generating K3s Config ---"
+      cat > /etc/rancher/k3s/config.yaml <<EOF
+      token: ${k3s_token}
+      node-ip: $(hostname -I | awk '{print $1}')
+      node-external-ip: $TS_IP
+      tls-san:
+        - ${hostname}
+        - $TS_IP
+        - ${load_balancer_ip}
+      flannel-backend: none
+      disable-network-policy: true
+      disable:
+        - traefik
+        - servicelb
+        - cloud-controller
+      etcd-s3: true
+      etcd-s3-endpoint: storage.googleapis.com
+      etcd-s3-access-key: ${s3_access_key}
+      etcd-s3-secret-key: ${s3_secret_key}
+      etcd-s3-bucket: ${s3_bucket}
+      etcd-snapshot-schedule-cron: "0 */6 * * *"
+      etcd-snapshot-retention: 10
+      kubelet-arg:
+        - "cloud-provider=external"
+        - "container-log-max-files=3"
+        - "container-log-max-size=10Mi"
+      ${k3s_cluster_setting}
+      EOF
+
+      # Phase 4: Service Start
+      echo "--- [Bootstrap] 4. Starting K3s Service ---"
+      systemctl enable k3s
+      systemctl start k3s
+
+      # Phase 5: Verification
+      # We wait for the node to register itself with the API server.
+      echo "--- [Bootstrap] 5. Waiting for Node Registration ---"
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+      for i in {1..60}; do
+        if kubectl get node ${hostname} >/dev/null 2>&1; then
+          echo "Node is registered."
+          break
+        fi
+        sleep 2
+      done
+
+      # Phase 6: Post-Start Cleanup
+      echo "--- [Bootstrap] 6. Finalizing Taints ---"
+      # Allow scheduling by removing the 'uninitialized' taint from the cloud provider
+      kubectl taint node ${hostname} node.cloudprovider.kubernetes.io/uninitialized:NoSchedule- || true
+
+      # Dev Environment Specifics: Allow workloads on the master node
+      if [ "${cloud_env}" == "dev" ]; then
+        echo "Dev environment: removing master taints..."
+        kubectl taint node ${hostname} node-role.kubernetes.io/master:NoSchedule- || true
+        kubectl taint node ${hostname} node-role.kubernetes.io/control-plane:NoSchedule- || true
+      fi
+
+      echo "=== Server Bootstrap Complete ==="
+
+# -----------------------------------------------------------------------------
+# RUNCMD: EXECUTION ORDER
+# -----------------------------------------------------------------------------
 runcmd:
-  # 1. Apply Netplan
+  # 1. Networking: Apply Netplan
   - echo "Applying Netplan..."
   - netplan apply || echo "Netplan apply failed, continuing..."
 
-  # 2. CRITICAL FIX: Ensure Default Route Exists BEFORE Bootstrap
-  # We use 'sh -c' to properly handle the if-statement logic in cloud-init
+  # 2. Networking: Ensure Default Route
+  # Critical for Hetzner vSwitch compatibility.
   - |
     sh -c '
-    echo "--- Verifying Default Route ---"
     CURRENT_ROUTE=$(ip route show default)
     if [ -z "$CURRENT_ROUTE" ]; then
       echo "No default route found. Adding via ${network_gateway}..."
       ip route add default via ${network_gateway}
-    else
-      echo "Default route exists: $CURRENT_ROUTE"
     fi
     '
 
-  # 3. Debug Network State (Verify the fix worked)
-  - echo "--- Network State Ready for Bootstrap ---"
-  - ip route
-  - ping -c 2 8.8.8.8 || echo "Connectivity Check Failed (Will retry in bootstrap)"
+  # 3. Connectivity: Tailscale Join
+  # This runs the actual 'up' command. It uses a retry loop to be robust against network blips.
+  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
+  - |
+    NEXT_WAIT_TIME=0
+    until tailscale up --authkey=${tailscale_auth_server_key} \
+      --ssh \
+      --hostname=${hostname} \
+      --advertise-tags="tag:k3s-server" \
+      --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+    do
+       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+       sleep 5
+       NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
+    done
 
-  # 4. Run Bootstrap Binary
-  - echo "=== Starting Server Node Bootstrap ==="
-  - ls -l /usr/local/bin/infra-bootstrap
-  - >
-    /usr/local/bin/infra-bootstrap
-    --role server
-    --hostname "${hostname}"
-    --cloud-env "${cloud_env}"
-    --k3s-token "${k3s_token}"
-    --load-balancer-ip "${load_balancer_ip}"
-    --tailscale-auth-key "${tailscale_auth_server_key}"
-    --init ${k3s_init}
-    --s3-bucket "${s3_bucket}"
-    --s3-access "${s3_access_key}"
-    --s3-secret "${s3_secret_key}"
-    --hcloud-token "${hcloud_token}"
-    --hcloud-network-name "${hcloud_network_name}"
-    --letsencrypt-email "${letsencrypt_email}"
-    --network-gateway "${network_gateway}" 2>&1 | tee -a /var/log/infra-bootstrap.log
-  - echo "=== Server Node Bootstrap Complete ==="
+  # 4. Bootstrap: Execute Main Script
+  # Now that the network is ready, run the logic defined in write_files.
+  - /usr/local/bin/k3s-start.sh
