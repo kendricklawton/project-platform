@@ -7,7 +7,7 @@ spec:
   chart: hcloud-csi
   repo: https://charts.hetzner.cloud
   targetNamespace: kube-system
-  version: "{{ .HcloudCSIVersion }}"
+  version: "${HcloudCSIVersion}"
   bootstrap: true
   set:
     node.kubeletDir: "/var/lib/kubelet"

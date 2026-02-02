@@ -8,7 +8,7 @@ spec:
   repo: https://charts.jetstack.io
   targetNamespace: cert-manager
   createNamespace: true
-  version: "{{ .CertManagerVersion }}"
+  version: "${CertManagerVersion}"
   bootstrap: true
   valuesContent: |-
     installCRDs: true

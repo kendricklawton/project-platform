@@ -7,7 +7,7 @@ spec:
   repo: https://helm.cilium.io/
   chart: cilium
   targetNamespace: kube-system
-  version: "{{ .CiliumVersion }}"
+  version: "${CiliumVersion}"
   bootstrap: true
   valuesContent: |-
     k8sServiceHost: 127.0.0.1

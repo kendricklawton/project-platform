@@ -49,6 +49,9 @@ write_files:
       fi
       echo "Tailscale IP: $TS_IP"
 
+      echo "--- [Bootstrap] Creating Config Directory ---"
+      mkdir -p /etc/rancher/k3s
+
       echo "--- [Bootstrap] Generating K3s Config ---"
       cat > /etc/rancher/k3s/config.yaml <<EOF
       server: https://${k3s_url}
