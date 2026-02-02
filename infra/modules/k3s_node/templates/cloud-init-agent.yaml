@@ -17,18 +17,30 @@ write_files:
         runtime_type = "io.containerd.runsc.v1"
 
 runcmd:
-  # Time Sync
+  # 1. Time Sync
   - systemctl enable systemd-timesyncd
   - systemctl start systemd-timesyncd
   - timedatectl set-ntp true
 
-  # Debug Network State
-  - echo "--- Pre-Bootstrap Network State ---"
-  - ip addr
-  - ip route
-  - ping -c 2 8.8.8.8 || echo "Pre-Bootstrap Connectivity Check Failed"
+  # 2. CRITICAL FIX: Ensure Default Route Exists
+  - |
+    sh -c '
+    echo "--- Verifying Default Route ---"
+    CURRENT_ROUTE=$(ip route show default)
+    if [ -z "$CURRENT_ROUTE" ]; then
+      echo "No default route found. Adding via ${network_gateway}..."
+      ip route add default via ${network_gateway}
+    else
+      echo "Default route exists: $CURRENT_ROUTE"
+    fi
+    '
 
-  # Run Bootstrap Binary
+  # 3. Debug Network State
+  - echo "--- Network State Ready for Bootstrap ---"
+  - ip route
+  - ping -c 2 8.8.8.8 || echo "Connectivity Check Failed"
+
+  # 4. Run Bootstrap Binary
   - echo "=== Starting Agent Node Bootstrap ==="
   - >
     /usr/local/bin/infra-bootstrap
@@ -38,8 +50,5 @@ runcmd:
     --k3s-token "${k3s_token}"
     --k3s-url "${k3s_url}"
     --tailscale-auth-key "${tailscale_auth_agent_key}"
-    --tailscale-tag "${tailscale_tag}"
     --network-gateway "${network_gateway}" 2>&1 | tee -a /var/log/infra-bootstrap.log
   - echo "=== Agent Node Bootstrap Complete ==="
-  - echo "--- Verifying Default Route ---"
-  - ip route show default || (echo "Fallback: Adding default route..." && ip route add default via ${network_gateway})

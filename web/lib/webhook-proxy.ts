@@ -18,22 +18,6 @@ export async function forwardWebhookRequest(
     "X-Internal-Api-Key": secret,
   };
 
-  // PRODUCTION: GCP Auth
-  if (process.env.NODE_ENV === "production") {
-    const authClient = await getGcpAuthClient();
-    const response = await authClient.request({
-      url,
-      method,
-      body: requestBody,
-      headers,
-    });
-    return {
-      status: response.status,
-      ok: response.status >= 200 && response.status < 300,
-    };
-  }
-
-  // DEVELOPMENT: Standard Fetch
   const response = await fetch(url, { method, body: requestBody, headers });
   return { status: response.status, ok: response.ok };
 }

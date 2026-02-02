@@ -51,7 +51,7 @@ type Config struct {
 	K3sURL           string // For agents
 	TailscaleKey     string
 	TailscaleTag     string
-	NetworkGateway   string
+	NetworkGateway   string // Still accepted as flag but only used for logging/debug if needed
 	PrivateIP        string
 	TailscaleIP      string
 	Interface        string
@@ -83,29 +83,29 @@ func main() {
 	log.Println("=== Starting Node Bootstrap (Go) ===")
 	log.Printf("Role: %s, Hostname: %s, Environment: %s", cfg.Role, cfg.Hostname, cfg.CloudEnv)
 
-	// We no longer configure Netplan/Routes here; Packer's baked image handles that.
+	// Phase 1: Discovery (Read-Only)
 	if err := detectNetwork(cfg); err != nil {
 		log.Fatalf("Network detection failed: %v", err)
 	}
 
-	if err := ensureDefaultRoute(cfg); err != nil {
-		log.Fatalf("Failed to ensure default route: %v", err)
-	}
-
+	// Phase 2: Cluster Connectivity
 	if err := setupTailscale(cfg); err != nil {
 		log.Fatalf("Tailscale setup failed: %v", err)
 	}
 
+	// Phase 3: K3s Configuration
 	if err := configureK3s(cfg); err != nil {
 		log.Fatalf("K3s configuration failed: %v", err)
 	}
 
+	// Phase 4: Manifest Injection (Server Only)
 	if cfg.Role == "server" {
 		if err := writeManifests(cfg); err != nil {
 			log.Fatalf("Failed to write manifests: %v", err)
 		}
 	}
 
+	// Phase 5: Start & Verify
 	if err := startK3s(cfg); err != nil {
 		log.Fatalf("Failed to start K3s: %v", err)
 	}
@@ -120,6 +120,7 @@ func main() {
 		}
 	}
 
+	// Phase 6: Finalize (Taint removal)
 	if cfg.Role == "server" {
 		if err := finalizeTaints(cfg); err != nil {
 			log.Printf("WARNING: Failed to remove taints: %v", err)
@@ -166,7 +167,6 @@ func parseFlags() *Config {
 	flag.StringVar(&cfg.LBIP, "load-balancer-ip", "", "Load Balancer IP")
 	flag.StringVar(&cfg.K3sURL, "k3s-url", "", "K3s URL (for agents)")
 	flag.StringVar(&cfg.TailscaleKey, "tailscale-auth-key", "", "Tailscale Auth Key")
-	flag.StringVar(&cfg.TailscaleTag, "tailscale-tag", "", "Tailscale Tag Override")
 	flag.StringVar(&cfg.NetworkGateway, "network-gateway", "", "Network Gateway IP")
 	flag.BoolVar(&cfg.IsInit, "init", false, "Is this the cluster init node?")
 
@@ -190,12 +190,10 @@ func parseFlags() *Config {
 	return cfg
 }
 
-// detectNetwork handles interface detection and IP retrieval only.
-// It relies on Packer/Netplan to have already configured the routes.
 func detectNetwork(cfg *Config) error {
-	log.Println("--- Network Detection ---")
+	log.Println("--- Network Detection (Read-Only) ---")
 
-	// Detect Interface
+	// 1. Detect Interface
 	iface, err := detectInterface()
 	if err != nil {
 		return err
@@ -203,19 +201,10 @@ func detectNetwork(cfg *Config) error {
 	cfg.Interface = iface
 	log.Printf("Detected interface: %s", iface)
 
-	// Ensure Interface is UP (Safety check)
-	runCommand("ip", "link", "set", "dev", iface, "up")
-
-	// Wait for IP (DHCP should have been handled by systemd-networkd)
+	// 2. Wait for IP (Assume OS has already acquired it)
 	ip, err := waitForIP(iface)
 	if err != nil {
-		// Fallback: Try force DHCP if the baked config failed to grab an IP
-		log.Println("No IP found, attempting dhclient fallback...")
-		runCommand("dhclient", iface)
-		ip, err = waitForIP(iface)
-		if err != nil {
-			return fmt.Errorf("failed to obtain IP: %v", err)
-		}
+		return fmt.Errorf("failed to obtain IP (check cloud-init logs): %v", err)
 	}
 	cfg.PrivateIP = ip
 	log.Printf("Private IP: %s", cfg.PrivateIP)
@@ -229,7 +218,6 @@ func detectInterface() (string, error) {
 		return "", err
 	}
 	for _, i := range ifaces {
-		// Look for standard ethernet names
 		if strings.HasPrefix(i.Name, "eth") || strings.HasPrefix(i.Name, "en") {
 			return i.Name, nil
 		}
@@ -243,7 +231,6 @@ func waitForIP(iface string) (string, error) {
 		if err == nil {
 			addrs, _ := ifaceObj.Addrs()
 			for _, addr := range addrs {
-				// Check for IPv4
 				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 					if ipnet.IP.To4() != nil {
 						return ipnet.IP.String(), nil
@@ -256,86 +243,110 @@ func waitForIP(iface string) (string, error) {
 	return "", fmt.Errorf("timeout waiting for IP")
 }
 
-func ensureDefaultRoute(cfg *Config) error {
-	if cfg.NetworkGateway == "" {
-		return nil
-	}
-	log.Println("--- Checking Default Route ---")
-
-	// Debug: show all routes
-	debugOut, _ := exec.Command("ip", "route").CombinedOutput()
-	log.Printf("Current Routes (Pre-Check):\n%s", string(debugOut))
-
-	out, err := exec.Command("ip", "route", "show", "default").Output()
-	if err == nil && len(out) > 0 {
-		log.Printf("Default route exists: %s", string(out))
-		return nil
-	}
-
-	log.Printf("Adding default route via %s on dev %s...", cfg.NetworkGateway, cfg.Interface)
-	// "onlink" is important because the gateway might be outside the subnet (or /32 address)
-	err = runCommand("ip", "route", "add", "default", "via", cfg.NetworkGateway, "dev", cfg.Interface, "onlink")
-	if err != nil {
-		if strings.Contains(err.Error(), "File exists") {
-			log.Println("Route add failed because it exists. Ignoring.")
-			return nil
-		}
-		return err
-	}
-
-	debugOut, _ = exec.Command("ip", "route").CombinedOutput()
-	log.Printf("Current Routes (Post-Fix):\n%s", string(debugOut))
-	return nil
-}
-
 // setupTailscale starts daemon, joins network, and retrieves Tailscale IP
 func setupTailscale(cfg *Config) error {
-	log.Println("--- Tailscale Setup ---")
-	runCommand("systemctl", "start", "tailscaled")
+	// 1. SETUP LOGGING TO /var/log/tailscale-join.log
+	// This ensures you can run 'cat /var/log/tailscale-join.log' to debug, just like on the NAT node.
+	logPath := "/var/log/tailscale-join.log"
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("WARNING: Could not open %s for writing: %v", logPath, err)
+	}
+	defer func() {
+		if f != nil {
+			f.Close()
+		}
+	}()
+
+	// Helper to write to both Standard Log (syslog) AND the Debug File
+	writeLog := func(format string, v ...any) {
+		msg := fmt.Sprintf(format, v...)
+		log.Println(msg) // To System Log
+		if f != nil {
+			// To /var/log/tailscale-join.log with timestamp
+			timestamp := time.Now().Format(time.RFC3339)
+			fmt.Fprintf(f, "%s %s\n", timestamp, msg)
+		}
+	}
+
+	writeLog("--- Tailscale Setup Starting ---")
+
+	// 2. Start Service
+	writeLog("Starting tailscaled service...")
+	if err := runCommand("systemctl", "start", "tailscaled"); err != nil {
+		writeLog("Failed to start tailscaled: %v", err)
+		return err
+	}
 	time.Sleep(2 * time.Second)
 
+	// 3. Determine Tags
 	tag := "tag:k3s-agent"
-	if cfg.Role == "server" {
+	if cfg.Role == "k3s-server" {
 		tag = "tag:k3s-server"
 	}
 
-	if cfg.TailscaleTag != "" {
-		tag = cfg.TailscaleTag
-	}
-
-	// Retry loop for join
+	// 4. Join Loop
 	success := false
+	var lastErr error
+
 	for i := range maxRetries {
-		err := runCommand("tailscale", "up", "--authkey="+cfg.TailscaleKey, "--ssh", "--hostname="+cfg.Hostname, "--advertise-tags="+tag, "--reset")
+		writeLog("Join Attempt %d/%d...", i+1, maxRetries)
+
+		err := runCommand("tailscale", "up",
+			"--authkey="+cfg.TailscaleKey,
+			"--ssh",
+			"--hostname="+cfg.Hostname,
+			"--advertise-tags="+tag,
+			"--reset")
+
 		if err == nil {
+			writeLog("Tailscale Up Success!")
 			success = true
 			break
 		}
-		log.Printf("Tailscale join attempt %d failed. Retrying...", i+1)
+
+		lastErr = err
+		writeLog("Join failed: %v", err)
+		writeLog("Retrying in %s...", retryInterval)
 		time.Sleep(retryInterval)
 	}
 
 	if !success {
-		return fmt.Errorf("failed to join Tailscale after retries")
+		errMsg := fmt.Sprintf("CRITICAL: Failed to join Tailscale after %d attempts.\nLast Error: %v", maxRetries, lastErr)
+		writeLog(errMsg)
+
+		// Return a helpful error for the main log
+		return fmt.Errorf(`%s
+*** TROUBLESHOOTING ***
+1. Run: cat /var/log/tailscale-join.log
+2. Check routes: ip route show default
+`, errMsg)
 	}
 
-	// Get Tailscale IP
+	// 5. Retrieve IP
 	out, err := exec.Command("tailscale", "ip", "-4").Output()
 	if err != nil {
+		writeLog("Failed to get Tailscale IP: %v", err)
 		return err
 	}
 	cfg.TailscaleIP = strings.TrimSpace(string(out))
-	log.Printf("Tailscale IP: %s", cfg.TailscaleIP)
+	writeLog("Tailscale IP acquired: %s", cfg.TailscaleIP)
+
 	return nil
 }
 
 func generateK3sConfig(cfg *Config) (string, error) {
+	// ---------------- MODIFIED SECTION ----------------
 	configTmpl := `token: {{.K3sToken}}
 node-ip: {{.PrivateIP}}
 node-external-ip: {{.TailscaleIP}}
 kubelet-arg:
   - "cloud-provider=external"
+  - "container-log-max-files=3"    # Keep only 3 old log files (Default is 5)
+  - "container-log-max-size=10Mi"  # Rotate when a file hits 10MB (Default is 10Mi)
 `
+	// --------------------------------------------------
+
 	if cfg.Role == "server" {
 		configTmpl += `tls-san:
   - {{.Hostname}}
@@ -386,7 +397,6 @@ func configureK3s(cfg *Config) error {
 	log.Println("--- K3s Configuration ---")
 
 	// Note: Packer already created /etc/rancher/k3s with correct permissions
-
 	content, err := generateK3sConfig(cfg)
 	if err != nil {
 		return err

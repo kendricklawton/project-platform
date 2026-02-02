@@ -57,7 +57,7 @@ runcmd:
     until tailscale up --authkey=${tailscale_auth_nat_key} \
       --ssh \
       --hostname=${hostname} \
-      --advertise-tags=${tailscale_tag} \
+      --advertise-tags="tag:nat" \
       --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
     do
        echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log

@@ -18,13 +18,13 @@ export default async function LandingPage() {
         {/* HERO SECTION */}
         <SiteHero
           badge={gitVersion}
-          title="Go Cloud."
-          subtitle="Private AI."
+          title="Go Faster."
+          subtitle="Fast starts, faster APIs. Deploy high-performance Go services in seconds. We handle the infrastructure, you handle the code."
           ctaText={user ? "Open Console" : "Start Building"}
           ctaHref={user ? "/dashboard" : signInUrl}
           secondaryText="Download CLI"
           secondaryHref="/download"
-          terminalCommand="mini deploy"
+          terminalCommand="plat deploy"
         />
 
         {/* ARCHITECTURE PROOF SECTION */}
@@ -42,11 +42,12 @@ export default async function LandingPage() {
 
             <div className="space-y-4">
               <h3 className="text-foreground font-bold text-xl tracking-tight">
-                Private Ollama
+                Encrypted Mesh
               </h3>
               <p className="text-muted-foreground leading-relaxed text-base">
-                In-cluster LLM access. Zero-latency inference over private
-                Tailscale tunnels. Keep your data off the public web.
+                Internal traffic travels over a private Tailscale network. We
+                secure the infrastructure, you just publish your API and bring
+                your own domain.
               </p>
             </div>
 

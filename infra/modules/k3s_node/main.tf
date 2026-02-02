@@ -45,11 +45,6 @@ variable "tailscale_auth_agent_key" {
   default   = ""
 }
 
-variable "tailscale_tag" {
-  type    = string
-  default = ""
-}
-
 variable "network_gateway" {
   type    = string
   default = "10.0.0.1"
@@ -166,7 +161,6 @@ resource "hcloud_server" "node" {
       ingress_nginx_version     = var.ingress_nginx_version
       cert_manager_version      = var.cert_manager_version
       nats_version              = var.nats_version
-      tailscale_tag             = var.tailscale_tag
       network_gateway           = var.network_gateway
     }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
@@ -175,7 +169,6 @@ resource "hcloud_server" "node" {
       k3s_url                  = "${var.load_balancer_ip}:6443"
       k3s_token                = var.k3s_token
       tailscale_auth_agent_key = var.tailscale_auth_agent_key
-      tailscale_tag            = var.tailscale_tag
       network_gateway          = var.network_gateway
     })
   )

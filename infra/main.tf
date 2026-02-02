@@ -23,11 +23,8 @@ variable "api_load_balancer_ip" {
   default     = "10.0.1.254"
 }
 variable "tailscale_auth_nat_key" { sensitive = true }
-variable "tailscale_auth_server_key" { sensitive = true }
-variable "tailscale_auth_agent_key" { sensitive = true }
-variable "tailscale_tag_nat" { type = string }
-variable "tailscale_tag_server" { type = string }
-variable "tailscale_tag_agent" { type = string }
+variable "tailscale_auth_k3s_server_key" { sensitive = true }
+variable "tailscale_auth_k3s_agent_key" { sensitive = true }
 variable "ssh_key_name" { type = string }
 variable "gcp_project_id" { type = string }
 variable "letsencrypt_email" { type = string }
@@ -64,7 +61,7 @@ locals {
   nat_user_data = templatefile("${path.module}/cloud-init-nat.yaml", {
     tailscale_auth_nat_key = var.tailscale_auth_nat_key
     hostname               = "${local.prefix}-nat-${var.hcloud_location}"
-    tailscale_tag          = var.tailscale_tag_nat
+    tailscale_tag          = "nat"
   })
 }
 
@@ -208,7 +205,7 @@ module "control_plane_init" {
   source                    = "./modules/k3s_node"
   cloud_env                 = var.cloud_env
   letsencrypt_email         = var.letsencrypt_email
-  hostname                  = format("${local.prefix}-server-%02d", 1)
+  hostname                  = format("${local.prefix}-k3s-server-%02d", 1)
   location                  = var.hcloud_location
   image                     = data.hcloud_image.k3s_base.id
   server_type               = local.env.master_type
@@ -219,8 +216,7 @@ module "control_plane_init" {
   k3s_token                 = random_password.k3s_token.result
   load_balancer_ip          = var.api_load_balancer_ip
   k3s_init                  = true
-  tailscale_auth_server_key = var.tailscale_auth_server_key
-  tailscale_tag             = var.tailscale_tag_server
+  tailscale_auth_server_key = var.tailscale_auth_k3s_server_key
   hcloud_token              = var.hcloud_token
   hcloud_network_name       = hcloud_network.main.name
   s3_access_key             = var.etcd_s3_access_key
@@ -247,7 +243,7 @@ module "control_plane_join" {
   count                     = local.env.master_count > 1 ? local.env.master_count - 1 : 0
   cloud_env                 = var.cloud_env
   letsencrypt_email         = var.letsencrypt_email
-  hostname                  = format("${local.prefix}-server-%02d", count.index + 2)
+  hostname                  = format("${local.prefix}-k3s-server-%02d", count.index + 2)
   location                  = var.hcloud_location
   image                     = data.hcloud_image.k3s_base.id
   server_type               = local.env.master_type
@@ -258,8 +254,7 @@ module "control_plane_join" {
   k3s_token                 = random_password.k3s_token.result
   load_balancer_ip          = var.api_load_balancer_ip
   k3s_init                  = false
-  tailscale_auth_server_key = var.tailscale_auth_server_key
-  tailscale_tag             = var.tailscale_tag_server
+  tailscale_auth_server_key = var.tailscale_auth_k3s_server_key
   hcloud_token              = var.hcloud_token
   hcloud_network_name       = hcloud_network.main.name
   s3_access_key             = var.etcd_s3_access_key
@@ -280,7 +275,7 @@ module "worker_agents" {
   source                   = "./modules/k3s_node"
   count                    = local.env.worker_count
   cloud_env                = var.cloud_env
-  hostname                 = format("${local.prefix}-agent-%02d", count.index + 1)
+  hostname                 = format("${local.prefix}-k3s-agent-%02d", count.index + 1)
   location                 = var.hcloud_location
   image                    = data.hcloud_image.k3s_base.id
   server_type              = local.env.worker_type
@@ -290,8 +285,7 @@ module "worker_agents" {
   node_role                = "agent"
   k3s_token                = random_password.k3s_token.result
   load_balancer_ip         = var.api_load_balancer_ip
-  tailscale_auth_agent_key = var.tailscale_auth_agent_key
-  tailscale_tag            = var.tailscale_tag_agent
+  tailscale_auth_agent_key = var.tailscale_auth_k3s_agent_key
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
   depends_on               = [time_sleep.wait_for_init_node, module.control_plane_join]

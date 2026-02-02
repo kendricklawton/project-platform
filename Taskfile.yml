@@ -12,11 +12,6 @@ vars:
   LETSENCRYPT_EMAIL: "{{.LETSENCRYPT_EMAIL}}"
   BUILD_SERVER_TYPE: '{{if eq .CLOUD_ENV "prod"}}cpx41{{else}}cpx21{{end}}'
 
-  # Tailscale Tags
-  TAILSCALE_TAG_NAT: '{{.TAILSCALE_TAG_NAT | default "tag:nat"}}'
-  TAILSCALE_TAG_SERVER: '{{.TAILSCALE_TAG_SERVER | default "tag:k3s-server"}}'
-  TAILSCALE_TAG_AGENT: '{{.TAILSCALE_TAG_AGENT | default "tag:k3s-agent"}}'
-
   # SOFTWARE VERSIONS (Single Source of Truth)
   # These are injected into the Go Binary or Packer
   K3S_VERSION: "v1.29.1+k3s2"
@@ -45,11 +40,8 @@ vars:
     -var="hcloud_token={{.HCLOUD_TOKEN}}"
     -var="ssh_key_name={{.SSH_KEY_NAME}}"
     -var="tailscale_auth_nat_key={{.TAILSCALE_AUTH_NAT_KEY}}"
-    -var="tailscale_auth_server_key={{.TAILSCALE_AUTH_SERVER_KEY}}"
-    -var="tailscale_auth_agent_key={{.TAILSCALE_AUTH_AGENT_KEY}}"
-    -var="tailscale_tag_nat={{.TAILSCALE_TAG_NAT}}"
-    -var="tailscale_tag_server={{.TAILSCALE_TAG_SERVER}}"
-    -var="tailscale_tag_agent={{.TAILSCALE_TAG_AGENT}}"
+    -var="tailscale_auth_k3s_server_key={{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
+    -var="tailscale_auth_k3s_agent_key={{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
     -var="letsencrypt_email={{.LETSENCRYPT_EMAIL}}"
 
 tasks:
@@ -130,8 +122,8 @@ tasks:
   infra:kubeconfig:
     desc: "Fetch Kubeconfig from leader via Tailscale MagicDNS"
     vars:
-      SSH_TARGET: "server-01"
       DNS_NAME: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-01"
+      SSH_TARGET: "{{.DNS_NAME}}"
     cmds:
       - mkdir -p .kube
       - echo "⏳ Checking connection to {{.SSH_TARGET}}..."
@@ -166,3 +158,9 @@ tasks:
           -var="etcd_s3_access_key=${ACCESS}" \
           -var="etcd_s3_secret_key=${SECRET}"
       - rm -f {{.KUBECONFIG_PATH}}
+
+  dev:web:
+    desc: "Start web server"
+    dir: web
+    cmds:
+      - npm run dev

@@ -40,8 +40,10 @@ export function SiteHero({
 
         <h1 className="text-6xl md:text-8xl font-extrabold tracking-tighter text-foreground font-sans">
           {title}
-          <span className="block text-muted-foreground mt-2">{subtitle}</span>
         </h1>
+        <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+          {subtitle}
+        </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href={ctaHref}>

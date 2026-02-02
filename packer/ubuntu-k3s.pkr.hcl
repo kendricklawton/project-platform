@@ -62,13 +62,12 @@ build {
   sources = ["source.hcloud.ash", "source.hcloud.hil"]
 
   # Upload the infra-bootstrap binary
-  # Assumes the compiled binary is in the same folder as this .pkr.hcl file
   provisioner "file" {
     source      = "${path.root}/infra-bootstrap"
     destination = "/usr/local/bin/infra-bootstrap"
   }
 
-  # Main Build Script (Installs, Configs, and Hardcoded Files)
+  # Main Build Script
   provisioner "shell" {
     inline = [
       "chmod +x /usr/local/bin/infra-bootstrap",
@@ -107,18 +106,13 @@ build {
       "systemctl enable tailscaled",
       "rm -f /var/lib/tailscale/tailscaled.state",
 
-      # Pre-bake K3s binary
+      # Pre-bake K3s binary (Do not start service yet)
       "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
 
-      # DNS Hardening
-      "which ufw && ufw disable || true",
-      "systemctl stop systemd-resolved",
-      "systemctl disable systemd-resolved",
+      # DNS Hardening (Force Public DNS, disable systemd stub)
       "rm -f /etc/resolv.conf",
       "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
       "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
-
-
 
       # gVisor RuntimeClass Manifest
       "mkdir -p /etc/rancher/k3s",
@@ -132,10 +126,9 @@ build {
       "EOF",
 
       # Prepare Service Units
+      # 1. Create Agent Service
       "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
       "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s agent|g' /etc/systemd/system/k3s-agent.service",
-      "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s server --disable-cloud-controller|g' /etc/systemd/system/k3s.service",
-
       "systemctl daemon-reload",
 
       # Load br_netfilter
@@ -153,6 +146,23 @@ build {
       "EOF",
 
       "sysctl --system",
+
+      # Log Rotation & Limits (Size Based Protection)
+      "cat > /etc/logrotate.d/infra-bootstrap <<EOF",
+      "/var/log/infra-bootstrap.log",
+      "/var/log/tailscale-join.log {",
+      "    size 10M",
+      "    rotate 5",
+      "    compress",
+      "    missingok",
+      "    notifempty",
+      "    copytruncate",
+      "}",
+      "EOF",
+
+      # Keep Journald capped at 1GB (This protects the rest of the system)
+      "sed -i 's/#SystemMaxUse=/SystemMaxUse=1G/g' /etc/systemd/journald.conf",
+      "sed -i 's/#SystemKeepFree=/SystemKeepFree=1G/g' /etc/systemd/journald.conf",
 
       # Cleanup
       "apt-get clean",

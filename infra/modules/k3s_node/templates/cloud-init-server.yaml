@@ -3,12 +3,30 @@ hostname: ${hostname}
 manage_etc_hosts: true
 
 runcmd:
+  # 1. Apply Netplan
   - echo "Applying Netplan..."
   - netplan apply || echo "Netplan apply failed, continuing..."
-  - echo "--- Pre-Bootstrap Network State ---"
-  - ip addr
+
+  # 2. CRITICAL FIX: Ensure Default Route Exists BEFORE Bootstrap
+  # We use 'sh -c' to properly handle the if-statement logic in cloud-init
+  - |
+    sh -c '
+    echo "--- Verifying Default Route ---"
+    CURRENT_ROUTE=$(ip route show default)
+    if [ -z "$CURRENT_ROUTE" ]; then
+      echo "No default route found. Adding via ${network_gateway}..."
+      ip route add default via ${network_gateway}
+    else
+      echo "Default route exists: $CURRENT_ROUTE"
+    fi
+    '
+
+  # 3. Debug Network State (Verify the fix worked)
+  - echo "--- Network State Ready for Bootstrap ---"
   - ip route
-  - ping -c 2 8.8.8.8 || echo "Pre-Bootstrap Connectivity Check Failed"
+  - ping -c 2 8.8.8.8 || echo "Connectivity Check Failed (Will retry in bootstrap)"
+
+  # 4. Run Bootstrap Binary
   - echo "=== Starting Server Node Bootstrap ==="
   - ls -l /usr/local/bin/infra-bootstrap
   - >
@@ -19,7 +37,6 @@ runcmd:
     --k3s-token "${k3s_token}"
     --load-balancer-ip "${load_balancer_ip}"
     --tailscale-auth-key "${tailscale_auth_server_key}"
-    --tailscale-tag "${tailscale_tag}"
     --init ${k3s_init}
     --s3-bucket "${s3_bucket}"
     --s3-access "${s3_access_key}"
@@ -29,5 +46,3 @@ runcmd:
     --letsencrypt-email "${letsencrypt_email}"
     --network-gateway "${network_gateway}" 2>&1 | tee -a /var/log/infra-bootstrap.log
   - echo "=== Server Node Bootstrap Complete ==="
-  - echo "--- Verifying Default Route ---"
-  - ip route show default || (echo "Fallback: Adding default route..." && ip route add default via ${network_gateway})
