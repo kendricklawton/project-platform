@@ -4,7 +4,7 @@
 /dist/
 /out/
 /build/
-infra-bootstrap
+packer/infra-bootstrap
 *.exe
 *.test
 *.prof
