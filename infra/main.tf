@@ -236,6 +236,8 @@ module "control_plane_init" {
   s3_secret_key             = var.etcd_s3_secret_key
   s3_bucket                 = var.etcd_s3_bucket
 
+  # NOTE: network_gateway removed (uses module default 10.0.0.1)
+
   # Versions
   hcloud_ccm_version    = var.hcloud_ccm_version
   hcloud_csi_version    = var.hcloud_csi_version
@@ -283,6 +285,8 @@ module "control_plane_join" {
   s3_secret_key             = var.etcd_s3_secret_key
   s3_bucket                 = var.etcd_s3_bucket
 
+  # NOTE: network_gateway removed (uses module default 10.0.0.1)
+
   # Versions
   hcloud_ccm_version    = var.hcloud_ccm_version
   hcloud_csi_version    = var.hcloud_csi_version
@@ -321,6 +325,8 @@ module "worker_agents" {
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
 
+  # NOTE: network_gateway removed (uses module default 10.0.0.1)
+
   depends_on = [time_sleep.wait_for_init_node, module.control_plane_join]
 }
 
@@ -342,7 +348,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Kubelet API
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -350,7 +355,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # VXLAN / Flannel
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -358,7 +362,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Cilium Health
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -366,7 +369,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Cilium VXLAN
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -374,7 +376,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # etcd
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -382,7 +383,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # HTTP/HTTPS
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -397,7 +397,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Tailscale & WireGuard
   rule {
     direction  = "in"
     protocol   = "udp"

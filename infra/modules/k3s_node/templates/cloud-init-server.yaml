@@ -2,30 +2,30 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
-# -----------------------------------------------------------------------------
-# WRITE FILES: HELPER SCRIPTS
-# -----------------------------------------------------------------------------
 write_files:
-  # 1. MANIFEST INJECTOR SCRIPT
-  # Purpose: Decouples complex YAML generation from cloud-init.
-  # Terraform generates the 'manifest_injector_script' string (base64 encoded files),
-  # and we simply write it here to be executed later.
+  # 1. RESTORE NETPLAN
+  - path: /etc/netplan/60-private-net.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp7s0:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: true
+
+  # 2. INJECT MANIFESTS SCRIPT
   - path: /usr/local/bin/inject-manifests.sh
     permissions: "0755"
     owner: root:root
     content: |
       #!/bin/bash
       set -e
-      echo "[Injector] creating manifest directory..."
       mkdir -p /var/lib/rancher/k3s/server/manifests
-
-      echo "[Injector] writing manifest files..."
-      # Terraform Variable Injection:
       ${indent(6, manifest_injector_script)}
 
-  # 2. SERVER BOOTSTRAP LOGIC
-  # Purpose: Handles the specific order of operations for a K3s Server:
-  # Wait for Network -> Config Gen -> Service Start -> Node Registration -> Taint Removal
+  # 3. SERVER BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0755"
     owner: root:root
@@ -33,13 +33,17 @@ write_files:
       #!/bin/bash
       set -e
 
-      # Phase 1: File Setup
-      echo "--- [Bootstrap] 1. Injecting Kubernetes Manifests ---"
+      echo "[Bootstrap] Injecting Manifests"
       /usr/local/bin/inject-manifests.sh
 
-      # Phase 2: Network Identity
-      # We cannot generate the K3s config without our VPN IP.
-      echo "--- [Bootstrap] 2. Waiting for Tailscale IP ---"
+      echo "[Bootstrap] Starting Tailscale Join Loop..."
+      # Wait for Internet connectivity first
+      for i in {1..30}; do
+        if ping -c 1 8.8.8.8 >/dev/null 2>&1; then break; fi
+        echo "Waiting for internet..."
+        sleep 2
+      done
+
       for i in {1..30}; do
         TS_IP=$(tailscale ip -4 2>/dev/null)
         if [ -n "$TS_IP" ]; then break; fi
@@ -47,14 +51,12 @@ write_files:
       done
 
       if [ -z "$TS_IP" ]; then
-        echo "CRITICAL: Could not get Tailscale IP. Exiting."
+        echo "CRITICAL: Could not get Tailscale IP"
         exit 1
       fi
       echo "Tailscale IP: $TS_IP"
 
-      # Phase 3: Configuration Generation
-      # We inject the Terraform variables here to create the final K3s config.
-      echo "--- [Bootstrap] 3. Generating K3s Config ---"
+      echo "--- [Bootstrap] Generating K3s Config ---"
       cat > /etc/rancher/k3s/config.yaml <<EOF
       token: ${k3s_token}
       node-ip: $(hostname -I | awk '{print $1}')
@@ -83,13 +85,10 @@ write_files:
       ${k3s_cluster_setting}
       EOF
 
-      # Phase 4: Service Start
       echo "--- [Bootstrap] 4. Starting K3s Service ---"
       systemctl enable k3s
       systemctl start k3s
 
-      # Phase 5: Verification
-      # We wait for the node to register itself with the API server.
       echo "--- [Bootstrap] 5. Waiting for Node Registration ---"
       export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
       for i in {1..60}; do
@@ -100,41 +99,22 @@ write_files:
         sleep 2
       done
 
-      # Phase 6: Post-Start Cleanup
       echo "--- [Bootstrap] 6. Finalizing Taints ---"
-      # Allow scheduling by removing the 'uninitialized' taint from the cloud provider
       kubectl taint node ${hostname} node.cloudprovider.kubernetes.io/uninitialized:NoSchedule- || true
-
-      # Dev Environment Specifics: Allow workloads on the master node
-      if [ "${cloud_env}" == "dev" ]; then
-        echo "Dev environment: removing master taints..."
-        kubectl taint node ${hostname} node-role.kubernetes.io/master:NoSchedule- || true
-        kubectl taint node ${hostname} node-role.kubernetes.io/control-plane:NoSchedule- || true
-      fi
 
       echo "=== Server Bootstrap Complete ==="
 
-# -----------------------------------------------------------------------------
-# RUNCMD: EXECUTION ORDER
-# -----------------------------------------------------------------------------
 runcmd:
-  # 1. Networking: Apply Netplan
-  - echo "Applying Netplan..."
-  - netplan apply || echo "Netplan apply failed, continuing..."
+  # 1. Apply Netplan
+  - netplan generate
+  - netplan apply
+  - sleep 5
 
-  # 2. Networking: Ensure Default Route
-  # Critical for Hetzner vSwitch compatibility.
-  - |
-    sh -c '
-    CURRENT_ROUTE=$(ip route show default)
-    if [ -z "$CURRENT_ROUTE" ]; then
-      echo "No default route found. Adding via ${network_gateway}..."
-      ip route add default via ${network_gateway}
-    fi
-    '
+  # 2. Add Default Route Explicitly
+  # Forcing traffic to the gateway on the specific interface
+  - ip route add default via ${network_gateway} dev enp7s0
 
-  # 3. Connectivity: Tailscale Join
-  # This runs the actual 'up' command. It uses a retry loop to be robust against network blips.
+  # 3. Tailscale Join
   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
     NEXT_WAIT_TIME=0
@@ -149,6 +129,5 @@ runcmd:
        NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
     done
 
-  # 4. Bootstrap: Execute Main Script
-  # Now that the network is ready, run the logic defined in write_files.
+  # 4. Run Bootstrap
   - /usr/local/bin/k3s-start.sh

@@ -6,7 +6,6 @@ terraform {
   }
 }
 
-# --- VARIABLES ---
 variable "hostname" { type = string }
 variable "cloud_env" { type = string }
 variable "location" { type = string }
@@ -14,7 +13,7 @@ variable "server_type" { type = string }
 variable "ssh_key_ids" { type = list(string) }
 variable "network_id" { type = string }
 variable "project_name" { type = string }
-variable "node_role" { type = string } # "server" | "agent"
+variable "node_role" { type = string }
 variable "k3s_token" { type = string }
 variable "load_balancer_ip" { type = string }
 
@@ -115,8 +114,6 @@ variable "nats_version" {
 locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 
-  # 1. TEMPLATE THE FILES
-  # We read and template every file just like before, but store them in a local map.
   manifest_files = {
     "01-hcloud-secret.yaml"       = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
     "02-hcloud-ccm.yaml"          = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
@@ -129,9 +126,6 @@ locals {
     "09-gvisor-runtimeclass.yaml" = file("${path.module}/manifests/09-gvisor-runtimeclass.yaml")
   }
 
-  # 2. GENERATE THE INJECTOR SCRIPT
-  # This loops through the map above and creates a single Bash script string.
-  # Each line is: echo 'BASE64_CONTENT' | base64 -d > /path/to/file
   manifest_injector_script = join("\n", [
     for filename, content in local.manifest_files :
     "echo '${base64encode(content)}' | base64 -d > /var/lib/rancher/k3s/server/manifests/${filename}"

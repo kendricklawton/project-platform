@@ -2,13 +2,20 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
-# -----------------------------------------------------------------------------
-# WRITE FILES: HELPER SCRIPTS
-# -----------------------------------------------------------------------------
 write_files:
-  # 1. GVISOR CONFIGURATION
-  # Purpose: Injects the specific Containerd config required to run gVisor.
-  # This template handles the runtime_type registration.
+  # 1. RESTORE NETPLAN
+  - path: /etc/netplan/60-private-net.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp7s0:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: true
+
+  # 2. GVISOR CONFIGURATION
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -21,9 +28,7 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-  # 2. AGENT BOOTSTRAP LOGIC
-  # Purpose: Handles the Agent startup sequence:
-  # Wait for Network -> Config Gen -> Service Start
+  # 3. AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0755"
     owner: root:root
@@ -31,8 +36,7 @@ write_files:
       #!/bin/bash
       set -e
 
-      # Phase 1: Network Identity
-      echo "--- [Bootstrap] 1. Waiting for Tailscale IP ---"
+      echo "[Bootstrap] Starting Tailscale Join Loop..."
       for i in {1..30}; do
         TS_IP=$(tailscale ip -4 2>/dev/null)
         if [ -n "$TS_IP" ]; then break; fi
@@ -45,9 +49,7 @@ write_files:
       fi
       echo "Tailscale IP: $TS_IP"
 
-      # Phase 2: Configuration Generation
-      # Agents must point to the Load Balancer URL, not a specific master.
-      echo "--- [Bootstrap] 2. Generating K3s Config ---"
+      echo "--- [Bootstrap] Generating K3s Config ---"
       cat > /etc/rancher/k3s/config.yaml <<EOF
       server: https://${k3s_url}
       token: ${k3s_token}
@@ -59,32 +61,26 @@ write_files:
         - "container-log-max-size=10Mi"
       EOF
 
-      # Phase 3: Service Start
-      echo "--- [Bootstrap] 3. Starting K3s Agent ---"
+      echo "--- [Bootstrap] Starting K3s Agent ---"
       systemctl enable k3s-agent
       systemctl start k3s-agent
       echo "=== Agent Bootstrap Complete ==="
 
-# -----------------------------------------------------------------------------
-# RUNCMD: EXECUTION ORDER
-# -----------------------------------------------------------------------------
 runcmd:
-  # 1. System: Time Sync
+  # 1. Apply Netplan
+  - netplan generate
+  - netplan apply
+  - sleep 5
+
+  # 2. Add Default Route Explicitly
+  - ip route add default via ${network_gateway} dev enp7s0
+
+  # 3. Time Sync
   - systemctl enable systemd-timesyncd
   - systemctl start systemd-timesyncd
   - timedatectl set-ntp true
 
-  # 2. Networking: Ensure Default Route
-  - |
-    sh -c '
-    CURRENT_ROUTE=$(ip route show default)
-    if [ -z "$CURRENT_ROUTE" ]; then
-      echo "No default route found. Adding via ${network_gateway}..."
-      ip route add default via ${network_gateway}
-    fi
-    '
-
-  # 3. Connectivity: Tailscale Join
+  # 4. Tailscale Join
   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
   - |
     NEXT_WAIT_TIME=0
@@ -99,5 +95,5 @@ runcmd:
        NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
     done
 
-  # 4. Bootstrap: Execute Main Script
+  # 5. Run Bootstrap
   - /usr/local/bin/k3s-start.sh
