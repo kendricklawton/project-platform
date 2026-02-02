@@ -9,13 +9,36 @@ vars:
   KUBECONFIG_PATH: ".kube/config"
   IMAGE_VERSION: '{{.IMAGE_VERSION | default "v1"}}'
   HCLOUD_LOCATION: '{{.HCLOUD_LOCATION | default "ash"}}'
+  LETSENCRYPT_EMAIL: "{{.LETSENCRYPT_EMAIL}}"
   BUILD_SERVER_TYPE: '{{if eq .CLOUD_ENV "prod"}}cpx41{{else}}cpx21{{end}}'
+
+  # Tailscale Tags
+  TAILSCALE_TAG_NAT: '{{.TAILSCALE_TAG_NAT | default "tag:nat"}}'
+  TAILSCALE_TAG_SERVER: '{{.TAILSCALE_TAG_SERVER | default "tag:k3s-server"}}'
+  TAILSCALE_TAG_AGENT: '{{.TAILSCALE_TAG_AGENT | default "tag:k3s-agent"}}'
+
+  # SOFTWARE VERSIONS (Single Source of Truth)
+  # These are injected into the Go Binary or Packer
+  K3S_VERSION: "v1.29.1+k3s2"
+  HELM_VERSION: "v3.14.2"
+
+  # Manifest Versions (Injected into Go)
+  HCLOUD_CCM_VERSION: "1.29.1"
+  HCLOUD_CSI_VERSION: "2.6.0"
+  CILIUM_VERSION: "1.15.1"
+  INGRESS_NGINX_VERSION: "4.10.0"
+  CERT_MANAGER_VERSION: "v1.14.0"
+  NATS_VERSION: "1.2.4"
+
+  # Terraform Command Wrapper
   TF_CMD: >-
     export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/keys/gcp-tf-state-sa-{{.CLOUD_ENV}}.json" &&
     terraform -chdir={{.TF_DIR}}
 
+  # Variables passed to Terraform
   TF_VARS: >-
     -var="cloud_env={{.CLOUD_ENV}}"
+    -var="hcloud_location={{.HCLOUD_LOCATION}}"
     -var="image_version={{.IMAGE_VERSION}}"
     -var="gcp_project_id={{.GCP_PROJECT_ID}}"
     -var="project_name={{.PROJECT_NAME}}"
@@ -24,6 +47,10 @@ vars:
     -var="tailscale_auth_nat_key={{.TAILSCALE_AUTH_NAT_KEY}}"
     -var="tailscale_auth_server_key={{.TAILSCALE_AUTH_SERVER_KEY}}"
     -var="tailscale_auth_agent_key={{.TAILSCALE_AUTH_AGENT_KEY}}"
+    -var="tailscale_tag_nat={{.TAILSCALE_TAG_NAT}}"
+    -var="tailscale_tag_server={{.TAILSCALE_TAG_SERVER}}"
+    -var="tailscale_tag_agent={{.TAILSCALE_TAG_AGENT}}"
+    -var="letsencrypt_email={{.LETSENCRYPT_EMAIL}}"
 
 tasks:
   _tf_init:
@@ -32,19 +59,46 @@ tasks:
       - echo "🔧 Initializing {{.CLOUD_ENV}} state..."
       - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
 
+  test:bootstrap:
+    desc: "Run smoke tests for bootstrap binary"
+    dir: infra-bootstrap
+    cmds:
+      - go test -v .
+
+  build:bootstrap:
+    desc: "Build bootstrap binary with INJECTED VERSIONS"
+    deps: [test:bootstrap]
+    dir: infra-bootstrap
+    cmds:
+      # We use -ldflags to overwrite the variables in main.go at compile time
+      - >-
+        env GOOS=linux GOARCH=amd64 go build -o ../{{.PACKER_DIR}}/infra-bootstrap
+        -ldflags "
+        -X main.HcloudCCMVersion={{.HCLOUD_CCM_VERSION}}
+        -X main.HcloudCSIVersion={{.HCLOUD_CSI_VERSION}}
+        -X main.CiliumVersion={{.CILIUM_VERSION}}
+        -X main.IngressNginxVersion={{.INGRESS_NGINX_VERSION}}
+        -X main.CertManagerVersion={{.CERT_MANAGER_VERSION}}
+        -X main.NatsVersion={{.NATS_VERSION}}
+        "
+        .
+
   packer:build:
-    desc: "Build Golden Images for all regions"
+    desc: "Build Golden Images with PINNED K3s"
+    deps: [build:bootstrap]
     cmds:
       - packer init {{.PACKER_DIR}}
       - >-
         packer build
         -var "hcloud_token={{.HCLOUD_TOKEN}}"
         -var "server_type={{.BUILD_SERVER_TYPE}}"
+        -var "k3s_version={{.K3S_VERSION}}"
+        -var "helm_version={{.HELM_VERSION}}"
         {{.PACKER_DIR}}/ubuntu-k3s.pkr.hcl
 
   infra:plan:
     desc: "Generate and show Terraform Plan"
-    deps: [_tf_init]
+    deps: [_tf_init, test:bootstrap]
     cmds:
       - |
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
@@ -56,7 +110,6 @@ tasks:
           -var="etcd_s3_bucket=${BUCKET}" \
           -var="etcd_s3_access_key=${ACCESS}" \
           -var="etcd_s3_secret_key=${SECRET}"
-    # Removed sources to ensure plan always runs even if only .env changed
 
   infra:apply:
     desc: "Apply changes to infrastructure"
@@ -77,15 +130,18 @@ tasks:
   infra:kubeconfig:
     desc: "Fetch Kubeconfig from leader via Tailscale MagicDNS"
     vars:
-      MASTER: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-0"
+      SSH_TARGET: "server-01"
+      DNS_NAME: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-01"
     cmds:
       - mkdir -p .kube
-      - echo "⏳ Checking connection to {{.MASTER}}..."
-      - until nc -zvw5 {{.MASTER}} 22; do sleep 5; done
-      - scp -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@{{.MASTER}}:/etc/rancher/k3s/k3s.yaml {{.KUBECONFIG_PATH}}
-      - sed -i.bak "s/127.0.0.1/{{.MASTER}}/g" {{.KUBECONFIG_PATH}} && rm -f {{.KUBECONFIG_PATH}}.bak
+      - echo "⏳ Checking connection to {{.SSH_TARGET}}..."
+      - until ssh -q {{.SSH_TARGET}} exit; do sleep 5; done
+      - echo "📥 Fetching Kubeconfig..."
+      - scp {{.SSH_TARGET}}:/etc/rancher/k3s/k3s.yaml {{.KUBECONFIG_PATH}}
+      - echo "Rx Adjusting API Server Address..."
+      - sed -i.bak "s/127.0.0.1/{{.DNS_NAME}}/g" {{.KUBECONFIG_PATH}} && rm -f {{.KUBECONFIG_PATH}}.bak
       - chmod 600 {{.KUBECONFIG_PATH}}
-      - echo "✅ Kubeconfig secured for {{.MASTER}}"
+      - echo "✅ Kubeconfig secured. Context ready."
 
   infra:deploy:
     desc: "Full Pipeline: Plan -> Apply -> Config"
@@ -110,11 +166,3 @@ tasks:
           -var="etcd_s3_access_key=${ACCESS}" \
           -var="etcd_s3_secret_key=${SECRET}"
       - rm -f {{.KUBECONFIG_PATH}}
-
-  ssh:prep:
-    desc: "Prepare SSH agent and clear old lab keys"
-    cmds:
-      - ssh-add -D
-      - ssh-add ~/.ssh/
-      - ssh-keygen -R 178.156.199.192 # Clear the NAT's old public IP
-      - echo "✅ SSH Agent ready with lab keys"

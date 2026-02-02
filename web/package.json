@@ -30,7 +30,6 @@
     "@tanstack/react-table": "^8.21.3",
     "@workos-inc/authkit-nextjs": "^2.12.2",
     "@workos-inc/node": "^7.77.0",
-    "add": "^2.0.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.26",

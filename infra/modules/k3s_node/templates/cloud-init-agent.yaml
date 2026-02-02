@@ -2,52 +2,8 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
-# -----------------------------------------------------------------------------
-# 1. CRITICAL CONFIGURATION FILES
-#    Cloud-Init writes these files to disk BEFORE running any shell commands.
-# -----------------------------------------------------------------------------
 write_files:
-  # A. Netplan Route (The Fix for "Network Unreachable")
-  #    PROBLEM: Hetzner uses different interface names depending on hardware.
-  #             - x86 Standard: 'eth0'
-  #             - ARM/Ampere:   'enp7s0'
-  #             - Old Intel:    'enp1s0'
-  #    SOLUTION: We explicitly define ALL of them with "optional: true".
-  #              Netplan will configure whichever one is physically present
-  #              and simply ignore the others. This is safer than Regex.
-  - path: /etc/netplan/60-hcloud-routes.yaml
-    permissions: "0600" # Set to 0600 to prevent the "Permissions too open" warning
-    content: |
-      network:
-        version: 2
-        ethernets:
-          # 1. Standard x86 Interface
-          eth0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-          # 2. ARM/Ampere Interface
-          enp7s0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-          # 3. Legacy/Alternate Interface
-          enp1s0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-
-  # B. gVisor Configuration (CRITICAL FOR AGENTS)
-  #    This file tells K3s: "Do not use the default container runtime."
-  #    Instead, we inject a custom config that registers 'runsc' (gVisor).
-  #    Why: This allows you to set `runtimeClassName: gvisor` in your Pod specs,
-  #         wrapping untrusted apps in a secure sandbox kernel.
+  # --- gVisor Config ---
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -57,79 +13,24 @@ write_files:
         stream_server_address = "127.0.0.1"
         stream_server_port = "10010"
         enable_selinux = {{ .NodeConfig.SELinux }}
-
-      # Register the 'runsc' binary (installed by Packer) as a runtime option
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-# -----------------------------------------------------------------------------
-# 2. EXECUTION STEPS (Run on First Boot)
-# -----------------------------------------------------------------------------
 runcmd:
-  # A. Apply Network Configuration
-  #    Forces the kernel to reload the routing table using the file we just wrote.
-  #    This connects the server to the internet (10.0.0.1 gateway).
-  - netplan apply
+  # Time Sync
+  - systemctl enable systemd-timesyncd
+  - systemctl start systemd-timesyncd
+  - timedatectl set-ntp true
 
-  # B. Disable UFW (Uncomplicated Firewall)
-  #    Kubernetes manages its own complex iptables/nftables rules.
-  #    UFW is too "dumb" to understand K8s overlay networks (VXLAN) and often
-  #    blocks Pod-to-Pod traffic. We disable it to prevent connection issues.
-  - ufw disable
-
-  # C. DNS Hardening
-  #    We remove Ubuntu's "systemd-resolved" stub resolver.
-  #    In K8s, local caching resolvers often create loopbacks that confuse CoreDNS.
-  #    We replace it with a "dumb" file pointing directly to 1.1.1.1 (Cloudflare).
-  - systemctl stop systemd-resolved
-  - systemctl disable systemd-resolved
-  - rm -f /etc/resolv.conf
-  - echo "nameserver 1.1.1.1" > /etc/resolv.conf
-  - echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-
-  # D. Start Tailscale
-  #    Starts the VPN daemon so we can authenticate in the next step.
-  - systemctl start tailscaled
-  - sleep 5
-
-  # E. Join Tailscale (The Retry Loop)
-  #    Network cards can take a few seconds to initialize on boot.
-  #    If 'tailscale up' runs before the network is ready, it fails.
-  #    This loop tries 12 times (60 seconds) to ensure a successful join.
-  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
-  - |
-    RETRY_COUNT=0
-    until tailscale up --authkey=${tailscale_auth_agent_key} \
-      --ssh \
-      --hostname=${hostname} \
-      --advertise-tags=tag:k3s-agent \
-      --reset >> /var/log/tailscale-join.log 2>&1 || [ $RETRY_COUNT -eq 12 ];
-    do
-       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
-       sleep 5
-       RETRY_COUNT=$((RETRY_COUNT+1))
-    done
-
-  # F. Join Cluster (Worker Mode)
-  #    We dynamically find the IP (compatible with any hardware) and write the config.
-  - |
-    # Dynamic IP detection: Scans for any interface starting with 'en' or 'eth'
-    PRIVATE_IP=$(ip -o -4 addr show | grep -E 'en|eth' | head -n1 | awk '{print $4}' | cut -d/ -f1)
-    TS_IP=$(tailscale ip -4 | head -n1)
-
-    mkdir -p /etc/rancher/k3s
-    cat > /etc/rancher/k3s/config.yaml <<EOF
-    server: https://${k3s_url}
-    token: ${k3s_token}
-    node-ip: $PRIVATE_IP
-    node-external-ip: $TS_IP
-    # "cloud-provider=external": Critical for the Hetzner Cloud Controller.
-    # It tells the node: "Don't guess your Public IP. Ask the Hetzner API."
-    kubelet-arg:
-      - "cloud-provider=external"
-    EOF
-
-    # We use 'k3s-agent', NOT 'k3s'.
-    # The 'k3s-agent.service' was created by our Packer script specifically for workers.
-    systemctl enable k3s-agent
-    systemctl start k3s-agent
+  # Run Bootstrap Binary
+  - echo "=== Starting Agent Node Bootstrap ==="
+  - >
+    /usr/local/bin/infra-bootstrap
+    --role agent
+    --hostname "${hostname}"
+    --cloud-env "${cloud_env}"
+    --k3s-token "${k3s_token}"
+    --k3s-url "${k3s_url}"
+    --tailscale-auth-key "${tailscale_auth_agent_key}"
+    --tailscale-tag "${tailscale_tag}"
+  - echo "=== Agent Node Bootstrap Complete ==="

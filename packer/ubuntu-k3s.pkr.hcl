@@ -22,9 +22,13 @@ variable "server_type" {
   default = "cpx21"
 }
 
-# --- BUILD SOURCES ---
-# We build identical images for both US East (Ashburn) and US West (Hillsboro)
-# so we can deploy clusters in either region without latency.
+variable "k3s_version" {
+  type    = string
+}
+
+variable "helm_version" {
+  type    = string
+}
 
 source "hcloud" "ash" {
   token         = var.hcloud_token
@@ -57,82 +61,107 @@ source "hcloud" "hil" {
 build {
   sources = ["source.hcloud.ash", "source.hcloud.hil"]
 
+  # Upload the infra-bootstrap binary
+  # Assumes the compiled binary is in the same folder as this .pkr.hcl file
+  provisioner "file" {
+    source      = "${path.root}/infra-bootstrap"
+    destination = "/usr/local/bin/infra-bootstrap"
+  }
+
+  # Main Build Script (Installs, Configs, and Hardcoded Files)
   provisioner "shell" {
     inline = [
+      "chmod +x /usr/local/bin/infra-bootstrap",
       "export DEBIAN_FRONTEND=noninteractive",
       "apt-get update && apt-get upgrade -y",
 
-      # 1. Install Basic Tools
-      # NOTE: We purposely OMIT 'ufw' here. K3s manages its own firewall rules.
-      # NOTE: We OMIT 'open-iscsi' for now.
-      #       If we later decide to run Databases (StatefulSets) that need
-      #       Persistent Volumes (Hetzner CSI), we MUST add 'open-iscsi' back to this list.
-      "apt-get install -y ca-certificates curl wget python3 wireguard logrotate",
+      # Install Basic Tools
+      "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping",
 
-      # 2. INSTALL GVISOR (The Sandbox)
-      # We install the 'runsc' binary now so it is baked into the image.
-      # Agent nodes will use this to sandbox untrusted code.
-      # Server nodes will have the binary but won't use it (config removed in cloud-init).
-      # NOTE: We use '$${VAR}' to prevent Packer from trying to interpret the variable.
-      #       This passes '${ARCH}' literally to the bash shell.
+      # Time Sync
+      "systemctl enable systemd-timesyncd",
+      "timedatectl set-ntp true",
+
+      # Install Helm
+      "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | DESIRED_VERSION='${var.helm_version}' bash",
+
+      # Install gVisor
       "ARCH=$(uname -m)",
       "URL=https://storage.googleapis.com/gvisor/releases/release/latest/$${ARCH}",
-
-      # Download runsc (The Kernel)
-      # REASON: We use 'wget' here because we need to DOWNLOAD files to disk.
-      # wget is better for multi-file downloads and saving artifacts compared to curl.
       "wget $${URL}/runsc $${URL}/runsc.sha512",
       "sha512sum -c runsc.sha512",
       "rm -f runsc.sha512",
       "chmod a+rx runsc",
       "mv runsc /usr/local/bin",
-      "ln -s /usr/local/bin/runsc /usr/bin/runsc",
+      "ln -sf /usr/local/bin/runsc /usr/bin/runsc",
 
-      # Download containerd-shim (The Bridge)
-      # This adapter allows K3s to talk to gVisor.
       "wget $${URL}/containerd-shim-runsc-v1 $${URL}/containerd-shim-runsc-v1.sha512",
       "sha512sum -c containerd-shim-runsc-v1.sha512",
       "rm -f containerd-shim-runsc-v1.sha512",
       "chmod a+rx containerd-shim-runsc-v1",
       "mv containerd-shim-runsc-v1 /usr/local/bin",
-      "ln -s /usr/local/bin/containerd-shim-runsc-v1 /usr/bin/containerd-shim-runsc-v1",
+      "ln -sf /usr/local/bin/containerd-shim-runsc-v1 /usr/bin/containerd-shim-runsc-v1",
 
-      # 3. Install Tailscale
-      # REASON: We use 'curl | sh' here because we want to STREAM the script
-      # directly to the shell interpreter without saving the .sh file to disk.
+      # Install Tailscale
       "curl -fsSL https://tailscale.com/install.sh | sh",
       "systemctl enable tailscaled",
       "rm -f /var/lib/tailscale/tailscaled.state",
 
-      # 4. Pre-bake K3s binary
-      # We install the binary now to speed up boot time (no downloading 50MB on startup).
-      # INSTALL_K3S_SKIP_ENABLE=true: Critical! Prevents K3s from starting immediately.
-      # We want cloud-init to configure it (Server vs Agent) before it starts.
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true sh -",
+      # Pre-bake K3s binary
+      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
 
-      # 5. DNS Hardening
-      # We remove 'systemd-resolved' because it acts as a caching stub resolver
-      # that often creates loopbacks/conflicts with Kubernetes CoreDNS.
-      # We replace it with a "dumb" file pointing to reliable global DNS.
+      # DNS Hardening
+      "which ufw && ufw disable || true",
       "systemctl stop systemd-resolved",
       "systemctl disable systemd-resolved",
       "rm -f /etc/resolv.conf",
       "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
       "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
 
-      # 6. Create k3s-agent service unit
-      # By default, the K3s installer creates a 'server' service.
-      # We clone and modify it to create an 'agent' service so our Agents
-      # can start up cleanly using 'systemctl start k3s-agent'.
+      # ----------------------------------------------------------------
+      # CRITICAL FIX: Generic Netplan Route
+      # Handles both 'enp7s0' and 'eth0' to ensure network connectivity
+      # ----------------------------------------------------------------
+      "mkdir -p /etc/netplan",
+      "cat > /etc/netplan/99-manual-route.yaml <<EOF",
+      "network:",
+      "  version: 2",
+      "  ethernets:",
+      "    all-en:",
+      "      match:",
+      "        name: \"e*\"",
+      "      dhcp4: true",
+      "      routes:",
+      "        - to: default",
+      "          via: 10.0.0.1",
+      "          on-link: true",
+      "EOF",
+      "chmod 600 /etc/netplan/99-manual-route.yaml",
+      # ----------------------------------------------------------------
+
+      # gVisor RuntimeClass Manifest
+      "mkdir -p /etc/rancher/k3s",
+      "mkdir -p /var/lib/rancher/k3s/server/manifests",
+      "cat > /var/lib/rancher/k3s/server/manifests/09-gvisor-runtimeclass.yaml <<EOF",
+      "apiVersion: node.k8s.io/v1",
+      "kind: RuntimeClass",
+      "metadata:",
+      "  name: gvisor",
+      "handler: runsc",
+      "EOF",
+
+      # Prepare Service Units
       "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
-      "sed -i 's|/usr/local/bin/k3s \\\\|/usr/local/bin/k3s agent \\\\|g' /etc/systemd/system/k3s-agent.service",
-      "sed -i 's|server|agent|g' /etc/systemd/system/k3s-agent.service",
+      "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s agent|g' /etc/systemd/system/k3s-agent.service",
+      "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s server --disable-cloud-controller|g' /etc/systemd/system/k3s.service",
+
       "systemctl daemon-reload",
 
-      # 7. Sysctl tuning
-      # These are kernel parameters required for Kubernetes networking.
-      # - ip_forward: Allows packets to traverse the node (essential for Pod-to-Pod).
-      # - fs.inotify: Increases file watch limits (essential for logging and storage).
+      # Load br_netfilter
+      "modprobe br_netfilter",
+      "echo 'br_netfilter' > /etc/modules-load.d/k3s.conf",
+
+      # Sysctl tuning
       "cat >> /etc/sysctl.d/99-k3s.conf <<EOF",
       "net.ipv4.ip_forward = 1",
       "net.ipv6.conf.all.forwarding = 1",
@@ -142,11 +171,12 @@ build {
       "fs.inotify.max_user_watches = 524288",
       "EOF",
 
-      # 8. Cleanup
-      # Remove temporary files and logs to keep the golden image small.
-      # We also reset the hostname so each new VM generates a unique one on boot.
+      "sysctl --system",
+
+      # Cleanup
       "apt-get clean",
       "rm -rf /var/lib/apt/lists/*",
+      "rm -f /etc/netplan/50-cloud-init.yaml",
       "cloud-init clean --logs --seed",
       "rm -f /etc/machine-id /var/lib/dbus/machine-id",
       "truncate -s 0 /etc/hostname"

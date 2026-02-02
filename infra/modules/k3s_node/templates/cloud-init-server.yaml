@@ -2,189 +2,23 @@
 hostname: ${hostname}
 manage_etc_hosts: true
 
-# -----------------------------------------------------------------------------
-# 1. CRITICAL CONFIGURATION FILES
-#    We write these to disk BEFORE running any commands.
-# -----------------------------------------------------------------------------
-write_files:
-  # A. Netplan Route (The Fix for "Network Unreachable")
-  #    PROBLEM: Hetzner uses different interface names for different server types.
-  #             - x86 Standard: 'eth0'
-  #             - ARM/Ampere:   'enp7s0'
-  #             - Old Intel:    'enp1s0'
-  #    SOLUTION: We explicitly define ALL of them with "optional: true".
-  #              Netplan will configure whichever one exists and ignore the rest.
-  #              This is safer than Regex because it avoids accidental matches.
-  - path: /etc/netplan/60-hcloud-routes.yaml
-    permissions: "0600" # Set to 0600 to prevent the "Permissions too open" warning
-    content: |
-      network:
-        version: 2
-        ethernets:
-          eth0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-          enp7s0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-          enp1s0:
-            dhcp4: true
-            optional: true
-            routes:
-              - to: default
-                via: 10.0.0.1
-
-# -----------------------------------------------------------------------------
-# 2. EXECUTION STEPS (Run on First Boot)
-# -----------------------------------------------------------------------------
 runcmd:
-  # A. Apply Network Configuration
-  #    This forces the kernel to read the new routing table immediately.
-  #    Without this, the server cannot talk to the internet (10.0.0.1 gateway).
   - netplan apply
-
-  # B. Disable UFW (Uncomplicated Firewall)
-  #    Kubernetes creates its own complex iptables rules. UFW interferes with
-  #    packet forwarding and overlay networks (VXLAN/Flannel). We kill it.
-  - ufw disable
-
-  # C. DNS Hardening
-  #    Ubuntu's "systemd-resolved" stub resolver often causes DNS loops in K8s.
-  #    We strip it out and force the server to use reliable upstream DNS directly.
-  - systemctl stop systemd-resolved
-  - systemctl disable systemd-resolved
-  - rm -f /etc/resolv.conf
-  - echo "nameserver 1.1.1.1" > /etc/resolv.conf
-  - echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-
-  # D. Start Tailscale
-  #    This connects the server to your private admin mesh.
-  - systemctl start tailscaled
-  - sleep 5
-
-  # E. Join Tailscale (The Retry Loop)
-  #    Network interfaces can be slow to wake up. This loop tries 12 times
-  #    (60 seconds) to join the VPN before giving up, preventing boot failures.
-  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
-  - |
-    RETRY_COUNT=0
-    until tailscale up --authkey=${tailscale_auth_server_key} \
-      --ssh \
-      --hostname=${hostname} \
-      --advertise-tags=tag:k3s-server \
-      --reset >> /var/log/tailscale-join.log 2>&1 || [ $RETRY_COUNT -eq 12 ];
-    do
-       echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
-       sleep 5
-       RETRY_COUNT=$((RETRY_COUNT+1))
-    done
-
-  # F. Configure K3s (Server Mode)
-  #    This builds the config file that defines the cluster settings.
-  - |
-    # Dynamic IP detection: Finds the IP of whatever card is active (eth0 or enp7s0)
-    PRIVATE_IP=$(ip -o -4 addr show | grep -E 'en|eth' | head -n1 | awk '{print $4}' | cut -d/ -f1)
-    TS_IP=$(tailscale ip -4 | head -n1)
-
-    mkdir -p /etc/rancher/k3s
-    cat > /etc/rancher/k3s/config.yaml <<EOF
-    token: ${k3s_token}
-    ${k3s_cluster_setting}
-    # Disable built-in junk so we can use "Real" tools (Hetzner CCM, Traefik v3 later)
-    disable:
-      - traefik
-      - servicelb
-      - cloud-controller
-    # Tell Kubelet: "You are external. Wait for Hetzner to initialize you."
-    kubelet-arg:
-      - "cloud-provider=external"
-    node-ip: $PRIVATE_IP
-    node-external-ip: $TS_IP
-    # Add extra IPs to the TLS cert so we can connect via Tailscale or Public IP
-    tls-san:
-      - ${hostname}
-      - $TS_IP
-      - ${lb_ip}
-    # SECURITY: Taint the master. User apps (Pods) are FORBIDDEN from running here.
-    node-taint:
-      - "node-role.kubernetes.io/master=true:NoSchedule"
-    flannel-backend: none
-    disable-network-policy: true
-    # Backup the Etcd Database to Google Storage (S3) automatically
-    etcd-s3: true
-    etcd-s3-endpoint: storage.googleapis.com
-    etcd-s3-access-key: ${s3_access_key}
-    etcd-s3-secret-key: ${s3_secret_key}
-    etcd-s3-bucket: ${s3_bucket}
-    EOF
-
-  - systemctl enable k3s
-  - systemctl start k3s
-
-  # G. Auto-Deploy Manifests (The "Zero Touch" Deployment)
-  #    Any file dropped in /var/lib/rancher/k3s/server/manifests is automatically
-  #    applied to the cluster by K3s. We use this to bootstrap the cluster.
-  - mkdir -p /var/lib/rancher/k3s/server/manifests
-  - |
-    # 1. Hetzner Cloud Controller (The "Bridge")
-    #    Allows K8s to talk to the Hetzner API (create Load Balancers, Routes, Volumes).
-    cat > /var/lib/rancher/k3s/server/manifests/hcloud-conf.yaml <<EOF
-    apiVersion: v1
-    kind: Secret
-    metadata:
-      name: hcloud
-      namespace: kube-system
-    stringData:
-      token: "${hcloud_token}"
-      network: "${hcloud_network_name}"
-    EOF
-
-    cat > /var/lib/rancher/k3s/server/manifests/hcloud-ccm.yaml <<EOF
-    apiVersion: helm.cattle.io/v1
-    kind: HelmChart
-    metadata:
-      name: hcloud-cloud-controller-manager
-      namespace: kube-system
-    spec:
-      chart: hcloud-cloud-controller-manager
-      repo: https://charts.hetzner.cloud
-      targetNamespace: kube-system
-      set:
-        networking.enabled: "true"
-        networking.network: "${hcloud_network_name}"
-    EOF
-
-    # 2. Argo CD (The "GitOps Engine")
-    #    We install this here so the cluster is ready to sync with GitHub immediately.
-    #    Note: The Pods will actually run on the AGENT nodes (because of taints),
-    #    but the INSTRUCTION to install it must come from the SERVER.
-    cat > /var/lib/rancher/k3s/server/manifests/argocd.yaml <<EOF
-    apiVersion: v1
-    kind: Namespace
-    metadata:
-      name: argocd
-    ---
-    apiVersion: helm.cattle.io/v1
-    kind: HelmChart
-    metadata:
-      name: argocd
-      namespace: kube-system
-    spec:
-      chart: argo-cd
-      repo: https://argoproj.github.io/argo-helm
-      targetNamespace: argocd
-      version: 5.51.6
-      set:
-        redis-ha.enabled: "false"
-        controller.replicas: "1"
-        server.replicas: "1"
-        repoServer.replicas: "1"
-        server.service.type: "ClusterIP"
-        configs.params.server.insecure: "true"
-    EOF
+  - echo "=== Starting Server Node Bootstrap ==="
+  - >
+    /usr/local/bin/infra-bootstrap
+    --role server
+    --hostname "${hostname}"
+    --cloud-env "${cloud_env}"
+    --k3s-token "${k3s_token}"
+    --load-balancer-ip "${load_balancer_ip}"
+    --tailscale-auth-key "${tailscale_auth_server_key}"
+    --tailscale-tag "${tailscale_tag}"
+    --init ${k3s_init}
+    --s3-bucket "${s3_bucket}"
+    --s3-access "${s3_access_key}"
+    --s3-secret "${s3_secret_key}"
+    --hcloud-token "${hcloud_token}"
+    --hcloud-network-name "${hcloud_network_name}"
+    --letsencrypt-email "${letsencrypt_email}"
+  - echo "=== Server Node Bootstrap Complete ==="

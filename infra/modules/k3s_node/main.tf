@@ -7,7 +7,8 @@ terraform {
 }
 
 # --- VARIABLES ---
-variable "name" { type = string }
+variable "hostname" { type = string }
+variable "cloud_env" { type = string }
 variable "location" { type = string }
 variable "server_type" { type = string }
 variable "ssh_key_ids" { type = list(string) }
@@ -44,6 +45,11 @@ variable "tailscale_auth_agent_key" {
   default   = ""
 }
 
+variable "tailscale_tag" {
+  type    = string
+  default = ""
+}
+
 variable "hcloud_token" {
   type      = string
   sensitive = true
@@ -70,12 +76,48 @@ variable "s3_bucket" {
   default = null
 }
 
+variable "letsencrypt_email" {
+  type    = string
+  default = null
+}
+
+# Component Versions
+variable "hcloud_ccm_version" {
+  type    = string
+  default = ""
+}
+
+variable "hcloud_csi_version" {
+  type    = string
+  default = ""
+}
+
+variable "cilium_version" {
+  type    = string
+  default = ""
+}
+
+variable "ingress_nginx_version" {
+  type    = string
+  default = ""
+}
+
+variable "cert_manager_version" {
+  type    = string
+  default = ""
+}
+
+variable "nats_version" {
+  type    = string
+  default = ""
+}
+
 locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 }
 
 resource "hcloud_server" "node" {
-  name        = var.name
+  name        = var.hostname
   image       = var.image
   server_type = var.server_type
   location    = var.location
@@ -98,8 +140,11 @@ resource "hcloud_server" "node" {
 
   user_data = (
     var.node_role == "server" ? templatefile("${path.module}/templates/cloud-init-server.yaml", {
-      hostname                  = var.name
+      hostname                  = var.hostname
+      letsencrypt_email         = var.letsencrypt_email
+      cloud_env                 = var.cloud_env
       k3s_token                 = var.k3s_token
+      k3s_init                  = var.k3s_init
       load_balancer_ip          = var.load_balancer_ip
       k3s_cluster_setting       = local.k3s_cluster_setting
       project_name              = var.project_name
@@ -109,12 +154,22 @@ resource "hcloud_server" "node" {
       tailscale_auth_server_key = var.tailscale_auth_server_key
       hcloud_token              = var.hcloud_token
       hcloud_network_name       = var.hcloud_network_name
+      location                  = var.location
+      hcloud_ccm_version        = var.hcloud_ccm_version
+      hcloud_csi_version        = var.hcloud_csi_version
+      cilium_version            = var.cilium_version
+      ingress_nginx_version     = var.ingress_nginx_version
+      cert_manager_version      = var.cert_manager_version
+      nats_version              = var.nats_version
+      tailscale_tag             = var.tailscale_tag
     }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
-      hostname                 = var.name
+      hostname                 = var.hostname
+      cloud_env                = var.cloud_env
       k3s_url                  = "${var.load_balancer_ip}:6443"
       k3s_token                = var.k3s_token
       tailscale_auth_agent_key = var.tailscale_auth_agent_key
+      tailscale_tag            = var.tailscale_tag
     })
   )
 }
@@ -123,6 +178,6 @@ output "id" {
   value = hcloud_server.node.id
 }
 
-output "private_ip" {
-  value = hcloud_server.node.network[*].ip
+output "ipv4_address" {
+  value = hcloud_server.node.ipv4_address
 }

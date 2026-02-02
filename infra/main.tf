@@ -1,4 +1,3 @@
-# --- FIREWALL ---
 terraform {
   required_version = ">= 1.5.0"
   backend "gcs" {}
@@ -11,20 +10,27 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.9.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5.1"
+    }
   }
 }
 
-# --- VARIABLES ---
 variable "hcloud_token" { sensitive = true }
-variable "load_balancer_ip" {
-  description = "Static internal IP for the Control Plane Load Balancer"
-  default     = "10.0.1.254" # Using the last IP in the subnet is a standard convention
+variable "api_load_balancer_ip" {
+  description = "Static internal IP for the API Server (Control Plane)"
+  default     = "10.0.1.254"
 }
 variable "tailscale_auth_nat_key" { sensitive = true }
 variable "tailscale_auth_server_key" { sensitive = true }
 variable "tailscale_auth_agent_key" { sensitive = true }
+variable "tailscale_tag_nat" { type = string }
+variable "tailscale_tag_server" { type = string }
+variable "tailscale_tag_agent" { type = string }
 variable "ssh_key_name" { type = string }
 variable "gcp_project_id" { type = string }
+variable "letsencrypt_email" { type = string }
 variable "cloud_env" { type = string }
 variable "project_name" { type = string }
 variable "image_version" { type = string }
@@ -47,22 +53,21 @@ locals {
     "ash" = "us-east"
     "hil" = "us-west"
   }
-
   network_zone = local.location_zone_map[var.hcloud_location]
 
   config = {
-    dev  = { master_type = "cpx21", master_count = 1, worker_type = "cpx21", worker_count = 1 }
-    prod = { master_type = "cpx21", master_count = 3, worker_type = "cpx41", worker_count = 3 }
+    dev  = { nat_type = "cpx11", master_type = "cpx21", master_count = 1, worker_type = "cpx21", worker_count = 1 }
+    prod = { nat_type = "cpx11", master_type = "cpx21", master_count = 3, worker_type = "cpx41", worker_count = 3 }
   }
   env = local.config[var.cloud_env]
 
   nat_user_data = templatefile("${path.module}/cloud-init-nat.yaml", {
     tailscale_auth_nat_key = var.tailscale_auth_nat_key
     hostname               = "${local.prefix}-nat-${var.hcloud_location}"
+    tailscale_tag          = var.tailscale_tag_nat
   })
 }
 
-# --- DATA SOURCES ---
 data "hcloud_image" "k3s_base" {
   with_selector = "role=k3s-base,region=${var.hcloud_location}"
   most_recent   = true
@@ -72,7 +77,6 @@ data "hcloud_ssh_key" "admin" {
   name = var.ssh_key_name
 }
 
-# --- NETWORKING ---
 resource "hcloud_network" "main" {
   name     = "${local.prefix}-vnet-${var.hcloud_location}"
   ip_range = "10.0.0.0/16"
@@ -85,11 +89,10 @@ resource "hcloud_network_subnet" "k3s_nodes" {
   ip_range     = "10.0.1.0/24"
 }
 
-# --- NAT GATEWAY ---
 resource "hcloud_server" "nat" {
   name        = "${local.prefix}-nat-${var.hcloud_location}"
   image       = "ubuntu-24.04"
-  server_type = "cpx11"
+  server_type = local.env.nat_type
   location    = var.hcloud_location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
   labels      = { role = "nat" }
@@ -120,23 +123,21 @@ resource "hcloud_network_route" "default_route" {
   depends_on  = [hcloud_server.nat]
 }
 
-# --- LOAD BALANCER ---
-resource "hcloud_load_balancer" "main" {
+resource "hcloud_load_balancer" "api" {
   name               = "${local.prefix}-lb-api-${var.hcloud_location}"
   load_balancer_type = "lb11"
   location           = var.hcloud_location
 }
 
-resource "hcloud_load_balancer_network" "serve_net" {
-  load_balancer_id = hcloud_load_balancer.main.id
+resource "hcloud_load_balancer_network" "api_net" {
+  load_balancer_id = hcloud_load_balancer.api.id
   network_id       = hcloud_network.main.id
-  ip               = var.load_balancer_ip
+  ip               = var.api_load_balancer_ip
   depends_on       = [hcloud_network_subnet.k3s_nodes]
 }
 
-# 1. Kubernetes API (Port 6443) -> Routes to Masters
 resource "hcloud_load_balancer_service" "k3s_api" {
-  load_balancer_id = hcloud_load_balancer.main.id
+  load_balancer_id = hcloud_load_balancer.api.id
   protocol         = "tcp"
   listen_port      = 6443
   destination_port = 6443
@@ -154,13 +155,24 @@ resource "hcloud_load_balancer_service" "k3s_api" {
   }
 }
 
-# 2. HTTP App Traffic (Port 80) -> Routes to Traefik on Workers
+resource "hcloud_load_balancer" "ingress" {
+  name               = "${local.prefix}-lb-ingress-${var.hcloud_location}"
+  load_balancer_type = "lb11"
+  location           = var.hcloud_location
+}
+
+resource "hcloud_load_balancer_network" "ingress_net" {
+  load_balancer_id = hcloud_load_balancer.ingress.id
+  network_id       = hcloud_network.main.id
+  depends_on       = [hcloud_network_subnet.k3s_nodes]
+}
+
 resource "hcloud_load_balancer_service" "http" {
-  load_balancer_id = hcloud_load_balancer.main.id
+  load_balancer_id = hcloud_load_balancer.ingress.id
   protocol         = "tcp"
   listen_port      = 80
   destination_port = 80
-  proxyprotocol    = true # Critical: Passes real client IP to Traefik
+  proxyprotocol    = true
 
   health_check {
     protocol = "tcp"
@@ -171,13 +183,12 @@ resource "hcloud_load_balancer_service" "http" {
   }
 }
 
-# 3. HTTPS App Traffic (Port 443) -> Routes to Traefik on Workers
 resource "hcloud_load_balancer_service" "https" {
-  load_balancer_id = hcloud_load_balancer.main.id
+  load_balancer_id = hcloud_load_balancer.ingress.id
   protocol         = "tcp"
   listen_port      = 443
   destination_port = 443
-  proxyprotocol    = true # Critical: Passes real client IP to Traefik
+  proxyprotocol    = true
 
   health_check {
     protocol = "tcp"
@@ -193,50 +204,83 @@ resource "random_password" "k3s_token" {
   special = false
 }
 
-module "control_plane" {
-  source           = "./modules/k3s_node"
-  count            = local.env.master_count
-  name             = format("${local.prefix}-server-%02d", count.index + 1)
-  location         = var.hcloud_location
-  image            = data.hcloud_image.k3s_base.id
-  server_type      = local.env.master_type
-  ssh_key_ids      = [data.hcloud_ssh_key.admin.id]
-  network_id       = hcloud_network.main.id
-  project_name     = local.prefix
-  node_role        = "server"
-  k3s_token        = random_password.k3s_token.result
-  load_balancer_ip = "10.0.1.254"
-
-  # Only index 0 initializes the cluster; others join via LB
-  k3s_init = count.index == 0 ? true : false
-
+module "control_plane_init" {
+  source                    = "./modules/k3s_node"
+  cloud_env                 = var.cloud_env
+  letsencrypt_email         = var.letsencrypt_email
+  hostname                  = format("${local.prefix}-server-%02d", 1)
+  location                  = var.hcloud_location
+  image                     = data.hcloud_image.k3s_base.id
+  server_type               = local.env.master_type
+  ssh_key_ids               = [data.hcloud_ssh_key.admin.id]
+  network_id                = hcloud_network.main.id
+  project_name              = local.prefix
+  node_role                 = "server"
+  k3s_token                 = random_password.k3s_token.result
+  load_balancer_ip          = var.api_load_balancer_ip
+  k3s_init                  = true
   tailscale_auth_server_key = var.tailscale_auth_server_key
+  tailscale_tag             = var.tailscale_tag_server
   hcloud_token              = var.hcloud_token
   hcloud_network_name       = hcloud_network.main.name
   s3_access_key             = var.etcd_s3_access_key
   s3_secret_key             = var.etcd_s3_secret_key
   s3_bucket                 = var.etcd_s3_bucket
 
-  depends_on = [
-    hcloud_network_route.default_route,
-    time_sleep.wait_for_nat_config
-  ]
+  depends_on = [hcloud_network_route.default_route, time_sleep.wait_for_nat_config]
 }
 
-# Attach Masters to Load Balancer (For API 6443)
-resource "hcloud_load_balancer_target" "k3s_api_targets" {
-  count            = local.env.master_count
+resource "hcloud_load_balancer_target" "api_target_init" {
   type             = "server"
-  load_balancer_id = hcloud_load_balancer.main.id
-  server_id        = module.control_plane[count.index].id
+  load_balancer_id = hcloud_load_balancer.api.id
+  server_id        = module.control_plane_init.id
   use_private_ip   = true
 }
 
-# --- WORKER NODES ---
+resource "time_sleep" "wait_for_init_node" {
+  depends_on      = [module.control_plane_init, hcloud_load_balancer_target.api_target_init]
+  create_duration = "120s"
+}
+
+module "control_plane_join" {
+  source                    = "./modules/k3s_node"
+  count                     = local.env.master_count > 1 ? local.env.master_count - 1 : 0
+  cloud_env                 = var.cloud_env
+  letsencrypt_email         = var.letsencrypt_email
+  hostname                  = format("${local.prefix}-server-%02d", count.index + 2)
+  location                  = var.hcloud_location
+  image                     = data.hcloud_image.k3s_base.id
+  server_type               = local.env.master_type
+  ssh_key_ids               = [data.hcloud_ssh_key.admin.id]
+  network_id                = hcloud_network.main.id
+  project_name              = local.prefix
+  node_role                 = "server"
+  k3s_token                 = random_password.k3s_token.result
+  load_balancer_ip          = var.api_load_balancer_ip
+  k3s_init                  = false
+  tailscale_auth_server_key = var.tailscale_auth_server_key
+  tailscale_tag             = var.tailscale_tag_server
+  hcloud_token              = var.hcloud_token
+  hcloud_network_name       = hcloud_network.main.name
+  s3_access_key             = var.etcd_s3_access_key
+  s3_secret_key             = var.etcd_s3_secret_key
+  s3_bucket                 = var.etcd_s3_bucket
+  depends_on                = [time_sleep.wait_for_init_node]
+}
+
+resource "hcloud_load_balancer_target" "api_targets_join" {
+  count            = local.env.master_count > 1 ? local.env.master_count - 1 : 0
+  type             = "server"
+  load_balancer_id = hcloud_load_balancer.api.id
+  server_id        = module.control_plane_join[count.index].id
+  use_private_ip   = true
+}
+
 module "worker_agents" {
   source                   = "./modules/k3s_node"
   count                    = local.env.worker_count
-  name                     = format("${local.prefix}-agent-%02d", count.index + 1)
+  cloud_env                = var.cloud_env
+  hostname                 = format("${local.prefix}-agent-%02d", count.index + 1)
   location                 = var.hcloud_location
   image                    = data.hcloud_image.k3s_base.id
   server_type              = local.env.worker_type
@@ -245,32 +289,25 @@ module "worker_agents" {
   project_name             = local.prefix
   node_role                = "agent"
   k3s_token                = random_password.k3s_token.result
-  load_balancer_ip         = "10.0.1.254"
+  load_balancer_ip         = var.api_load_balancer_ip
   tailscale_auth_agent_key = var.tailscale_auth_agent_key
+  tailscale_tag            = var.tailscale_tag_agent
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
-
-  depends_on = [
-    hcloud_network_route.default_route,
-    time_sleep.wait_for_nat_config,
-    module.control_plane
-  ]
+  depends_on               = [time_sleep.wait_for_init_node, module.control_plane_join]
 }
 
-# Attach Workers to Load Balancer (For App Traffic 80/443)
-resource "hcloud_load_balancer_target" "worker_targets" {
+resource "hcloud_load_balancer_target" "ingress_targets" {
   count            = local.env.worker_count
   type             = "server"
-  load_balancer_id = hcloud_load_balancer.main.id
+  load_balancer_id = hcloud_load_balancer.ingress.id
   server_id        = module.worker_agents[count.index].id
   use_private_ip   = true
 }
 
-# --- FIREWALL ---
 resource "hcloud_firewall" "cluster_fw" {
   name = "${local.prefix}-fw-${var.hcloud_location}"
 
-  # Allow K3s API from Internal Network (LB uses this)
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -278,7 +315,15 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Allow VXLAN Overlay (Internal Only)
+  # Kubelet API (Internal Only - needed for kubectl logs/exec)
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "10250"
+    source_ips = ["10.0.0.0/16"]
+  }
+
+  # VXLAN / Flannel (Internal Only)
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -286,7 +331,31 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Allow HTTP (80) from Load Balancer
+  # Cilium Health Checks (Internal Only)
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "4240"
+    source_ips = ["10.0.0.0/16"]
+  }
+
+  # Cilium VXLAN (Internal Only)
+  rule {
+    direction  = "in"
+    protocol   = "udp"
+    port       = "8473"
+    source_ips = ["10.0.0.0/16"]
+  }
+
+  # etcd (Internal Only - for HA control plane)
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "2379-2380"
+    source_ips = ["10.0.0.0/16"]
+  }
+
+  # HTTP/HTTPS (Internal Only - LB forwards to these)
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -294,7 +363,6 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
-  # Allow HTTPS (443) from Load Balancer
   rule {
     direction  = "in"
     protocol   = "tcp"
@@ -302,9 +370,41 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["10.0.0.0/16"]
   }
 
+  # Tailscale UDP (Allow from anywhere for direct connections)
+  rule {
+    direction  = "in"
+    protocol   = "udp"
+    port       = "41641"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
+  # WireGuard (Tailscale fallback)
+  rule {
+    direction  = "in"
+    protocol   = "udp"
+    port       = "51820"
+    source_ips = ["0.0.0.0/0", "::/0"]
+  }
+
   apply_to { label_selector = "cluster=${local.prefix}" }
 }
 
-output "lb_public_ip" {
-  value = hcloud_load_balancer.main.ipv4
+output "api_endpoint" {
+  description = "Cluster Management Endpoint (Private)"
+  value       = var.api_load_balancer_ip
+}
+
+output "public_ingress_ip" {
+  description = "POINT CLOUDFLARE HERE for your Users"
+  value       = hcloud_load_balancer.ingress.ipv4
+}
+
+output "control_plane_ids" {
+  description = "IDs of all control plane nodes"
+  value       = concat([module.control_plane_init.id], module.control_plane_join[*].id)
+}
+
+output "worker_ids" {
+  description = "IDs of all worker nodes"
+  value       = module.worker_agents[*].id
 }
