@@ -50,6 +50,11 @@ variable "tailscale_tag" {
   default = ""
 }
 
+variable "network_gateway" {
+  type    = string
+  default = "10.0.0.1"
+}
+
 variable "hcloud_token" {
   type      = string
   sensitive = true
@@ -162,6 +167,7 @@ resource "hcloud_server" "node" {
       cert_manager_version      = var.cert_manager_version
       nats_version              = var.nats_version
       tailscale_tag             = var.tailscale_tag
+      network_gateway           = var.network_gateway
     }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
       hostname                 = var.hostname
@@ -170,6 +176,7 @@ resource "hcloud_server" "node" {
       k3s_token                = var.k3s_token
       tailscale_auth_agent_key = var.tailscale_auth_agent_key
       tailscale_tag            = var.tailscale_tag
+      network_gateway          = var.network_gateway
     })
   )
 }

@@ -51,6 +51,7 @@ type Config struct {
 	K3sURL           string // For agents
 	TailscaleKey     string
 	TailscaleTag     string
+	NetworkGateway   string
 	PrivateIP        string
 	TailscaleIP      string
 	Interface        string
@@ -85,6 +86,10 @@ func main() {
 	// We no longer configure Netplan/Routes here; Packer's baked image handles that.
 	if err := detectNetwork(cfg); err != nil {
 		log.Fatalf("Network detection failed: %v", err)
+	}
+
+	if err := ensureDefaultRoute(cfg); err != nil {
+		log.Fatalf("Failed to ensure default route: %v", err)
 	}
 
 	if err := setupTailscale(cfg); err != nil {
@@ -162,6 +167,7 @@ func parseFlags() *Config {
 	flag.StringVar(&cfg.K3sURL, "k3s-url", "", "K3s URL (for agents)")
 	flag.StringVar(&cfg.TailscaleKey, "tailscale-auth-key", "", "Tailscale Auth Key")
 	flag.StringVar(&cfg.TailscaleTag, "tailscale-tag", "", "Tailscale Tag Override")
+	flag.StringVar(&cfg.NetworkGateway, "network-gateway", "", "Network Gateway IP")
 	flag.BoolVar(&cfg.IsInit, "init", false, "Is this the cluster init node?")
 
 	// Server specific
@@ -248,6 +254,38 @@ func waitForIP(iface string) (string, error) {
 		time.Sleep(1 * time.Second)
 	}
 	return "", fmt.Errorf("timeout waiting for IP")
+}
+
+func ensureDefaultRoute(cfg *Config) error {
+	if cfg.NetworkGateway == "" {
+		return nil
+	}
+	log.Println("--- Checking Default Route ---")
+
+	// Debug: show all routes
+	debugOut, _ := exec.Command("ip", "route").CombinedOutput()
+	log.Printf("Current Routes (Pre-Check):\n%s", string(debugOut))
+
+	out, err := exec.Command("ip", "route", "show", "default").Output()
+	if err == nil && len(out) > 0 {
+		log.Printf("Default route exists: %s", string(out))
+		return nil
+	}
+
+	log.Printf("Adding default route via %s on dev %s...", cfg.NetworkGateway, cfg.Interface)
+	// "onlink" is important because the gateway might be outside the subnet (or /32 address)
+	err = runCommand("ip", "route", "add", "default", "via", cfg.NetworkGateway, "dev", cfg.Interface, "onlink")
+	if err != nil {
+		if strings.Contains(err.Error(), "File exists") {
+			log.Println("Route add failed because it exists. Ignoring.")
+			return nil
+		}
+		return err
+	}
+
+	debugOut, _ = exec.Command("ip", "route").CombinedOutput()
+	log.Printf("Current Routes (Post-Fix):\n%s", string(debugOut))
+	return nil
 }
 
 // setupTailscale starts daemon, joins network, and retrieves Tailscale IP

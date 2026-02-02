@@ -3,8 +3,14 @@ hostname: ${hostname}
 manage_etc_hosts: true
 
 runcmd:
-  - netplan apply
+  - echo "Applying Netplan..."
+  - netplan apply || echo "Netplan apply failed, continuing..."
+  - echo "--- Pre-Bootstrap Network State ---"
+  - ip addr
+  - ip route
+  - ping -c 2 8.8.8.8 || echo "Pre-Bootstrap Connectivity Check Failed"
   - echo "=== Starting Server Node Bootstrap ==="
+  - ls -l /usr/local/bin/infra-bootstrap
   - >
     /usr/local/bin/infra-bootstrap
     --role server
@@ -21,4 +27,7 @@ runcmd:
     --hcloud-token "${hcloud_token}"
     --hcloud-network-name "${hcloud_network_name}"
     --letsencrypt-email "${letsencrypt_email}"
+    --network-gateway "${network_gateway}" 2>&1 | tee -a /var/log/infra-bootstrap.log
   - echo "=== Server Node Bootstrap Complete ==="
+  - echo "--- Verifying Default Route ---"
+  - ip route show default || (echo "Fallback: Adding default route..." && ip route add default via ${network_gateway})

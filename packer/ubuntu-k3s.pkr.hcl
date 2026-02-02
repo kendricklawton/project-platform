@@ -118,26 +118,7 @@ build {
       "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
       "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
 
-      # ----------------------------------------------------------------
-      # CRITICAL FIX: Generic Netplan Route
-      # Handles both 'enp7s0' and 'eth0' to ensure network connectivity
-      # ----------------------------------------------------------------
-      "mkdir -p /etc/netplan",
-      "cat > /etc/netplan/99-manual-route.yaml <<EOF",
-      "network:",
-      "  version: 2",
-      "  ethernets:",
-      "    all-en:",
-      "      match:",
-      "        name: \"e*\"",
-      "      dhcp4: true",
-      "      routes:",
-      "        - to: default",
-      "          via: 10.0.0.1",
-      "          on-link: true",
-      "EOF",
-      "chmod 600 /etc/netplan/99-manual-route.yaml",
-      # ----------------------------------------------------------------
+
 
       # gVisor RuntimeClass Manifest
       "mkdir -p /etc/rancher/k3s",
