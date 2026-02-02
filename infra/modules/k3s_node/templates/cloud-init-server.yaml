@@ -57,7 +57,7 @@ write_files:
       echo "Tailscale IP: $TS_IP"
 
       echo "--- [Bootstrap] Creating Config Directory ---"
-      mkdir -p /etc/rancher/k3s
+            mkdir -p /etc/rancher/k3s
 
       echo "--- [Bootstrap] Generating K3s Config ---"
       cat > /etc/rancher/k3s/config.yaml <<EOF
@@ -90,7 +90,7 @@ write_files:
 
       echo "--- [Bootstrap] 4. Starting K3s Service ---"
       systemctl enable k3s
-      systemctl start k3s
+      systemctl restart k3s
 
       echo "--- [Bootstrap] 5. Waiting for Node Registration ---"
       export KUBECONFIG=/etc/rancher/k3s/k3s.yaml

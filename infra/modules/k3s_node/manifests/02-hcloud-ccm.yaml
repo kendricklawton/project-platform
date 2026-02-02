@@ -7,8 +7,7 @@ spec:
   chart: hcloud-cloud-controller-manager
   repo: https://charts.hetzner.cloud
   targetNamespace: kube-system
-  version: "${HcloudCCMVersion}" # <--- FIXED (Removed space)
+  version: "${HcloudCCMVersion}"
   bootstrap: true
   set:
     networking.enabled: "true"
-    networking.network: "${HcloudNetwork}"

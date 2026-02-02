@@ -152,15 +152,11 @@ resource "hcloud_load_balancer_service" "k3s_api" {
   destination_port = 6443
 
   health_check {
-    protocol = "http"
+    protocol = "tcp"
     port     = 6443
     interval = 10
     timeout  = 5
     retries  = 3
-    http {
-      path = "/healthz"
-      tls  = true
-    }
   }
 }
 

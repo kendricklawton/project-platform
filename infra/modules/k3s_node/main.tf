@@ -77,7 +77,7 @@ variable "s3_bucket" {
 
 variable "letsencrypt_email" {
   type    = string
-  default = null
+  default = ""
 }
 
 # Component Versions
@@ -115,14 +115,17 @@ locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 
   manifest_files = {
-    "01-hcloud-secret.yaml"       = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
-    "02-hcloud-ccm.yaml"          = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
-    "03-hcloud-csi.yaml"          = templatefile("${path.module}/manifests/03-hcloud-csi.yaml", { HcloudCSIVersion = var.hcloud_csi_version })
-    "04-cilium.yaml"              = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version })
-    "05-ingress-nginx.yaml"       = templatefile("${path.module}/manifests/05-ingress-nginx.yaml", { IngressNginxVersion = var.ingress_nginx_version })
-    "06-nats.yaml"                = templatefile("${path.module}/manifests/06-nats.yaml", { NatsVersion = var.nats_version })
-    "07-cert-manager.yaml"        = templatefile("${path.module}/manifests/07-cert-manager.yaml", { CertManagerVersion = var.cert_manager_version })
-    "08-letsencrypt-issuer.yaml"  = templatefile("${path.module}/manifests/08-letsencrypt-issuer.yaml", { LetsEncryptEmail = var.letsencrypt_email })
+    "01-hcloud-secret.yaml" = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
+    "02-hcloud-ccm.yaml"    = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
+    "03-hcloud-csi.yaml"    = templatefile("${path.module}/manifests/03-hcloud-csi.yaml", { HcloudCSIVersion = var.hcloud_csi_version })
+    "04-cilium.yaml"        = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version })
+    "05-ingress-nginx.yaml" = templatefile("${path.module}/manifests/05-ingress-nginx.yaml", { IngressNginxVersion = var.ingress_nginx_version })
+    "06-nats.yaml"          = templatefile("${path.module}/manifests/06-nats.yaml", { NatsVersion = var.nats_version })
+    "07-cert-manager.yaml"  = templatefile("${path.module}/manifests/07-cert-manager.yaml", { CertManagerVersion = var.cert_manager_version })
+    "08-letsencrypt-issuer.yaml" = templatefile("${path.module}/manifests/08-letsencrypt-issuer.yaml", {
+      LetsEncryptEmail = var.letsencrypt_email,
+      CloudEnv         = var.cloud_env
+    })
     "09-gvisor-runtimeclass.yaml" = file("${path.module}/manifests/09-gvisor-runtimeclass.yaml")
   }
 
