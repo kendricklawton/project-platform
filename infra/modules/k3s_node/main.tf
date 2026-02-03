@@ -118,7 +118,7 @@ locals {
     "01-hcloud-secret.yaml" = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
     "02-hcloud-ccm.yaml"    = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
     "03-hcloud-csi.yaml"    = templatefile("${path.module}/manifests/03-hcloud-csi.yaml", { HcloudCSIVersion = var.hcloud_csi_version })
-    "04-cilium.yaml"        = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version })
+    "04-cilium.yaml"        = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version, K8sServiceHost = var.load_balancer_ip })
     "05-ingress-nginx.yaml" = templatefile("${path.module}/manifests/05-ingress-nginx.yaml", { IngressNginxVersion = var.ingress_nginx_version })
     "06-nats.yaml"          = templatefile("${path.module}/manifests/06-nats.yaml", { NatsVersion = var.nats_version })
     "07-cert-manager.yaml"  = templatefile("${path.module}/manifests/07-cert-manager.yaml", { CertManagerVersion = var.cert_manager_version })

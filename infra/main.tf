@@ -320,10 +320,7 @@ module "worker_agents" {
   tailscale_auth_agent_key = var.tailscale_auth_k3s_agent_key
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
-
-  # NOTE: network_gateway removed (uses module default 10.0.0.1)
-
-  depends_on = [time_sleep.wait_for_init_node, module.control_plane_join]
+  depends_on               = [time_sleep.wait_for_init_node, module.control_plane_join]
 }
 
 resource "hcloud_load_balancer_target" "ingress_targets" {

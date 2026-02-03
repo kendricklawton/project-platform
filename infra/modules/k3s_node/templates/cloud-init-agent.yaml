@@ -28,7 +28,31 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-  # 3. AGENT BOOTSTRAP SCRIPT
+  # 3. K3S AGENT SERVICE
+  - path: /etc/systemd/system/k3s-agent.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Lightweight Kubernetes
+      Documentation=https://k3s.io
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=notify
+      EnvironmentFile=-/etc/default/k3s
+      EnvironmentFile=-/etc/sysconfig/k3s
+      EnvironmentFile=-/etc/systemd/system/k3s.service.env
+      ExecStart=/usr/local/bin/k3s agent
+      KillMode=process
+      Delegate=yes
+      LimitNOFILE=1048576
+      LimitNPROC=infinity
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # 4. AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0755"
     owner: root:root
@@ -65,6 +89,7 @@ write_files:
       EOF
 
       echo "--- [Bootstrap] Starting K3s Agent ---"
+      systemctl daemon-reload
       systemctl enable k3s-agent
       systemctl start k3s-agent
       echo "=== Agent Bootstrap Complete ==="

@@ -44,6 +44,19 @@ write_files:
         sleep 2
       done
 
+      # Fetch HCloud Server ID from Metadata Service (Fixes Terraform Circular Dependency)
+      echo "[Bootstrap] Fetching HCloud Server ID..."
+      for i in {1..10}; do
+        HCLOUD_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id)
+        if [ -n "$HCLOUD_ID" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$HCLOUD_ID" ]; then
+        echo "CRITICAL: Could not fetch HCloud Server ID from metadata service"
+        exit 1
+      fi
+
       for i in {1..30}; do
         TS_IP=$(tailscale ip -4 2>/dev/null)
         if [ -n "$TS_IP" ]; then break; fi
@@ -57,7 +70,7 @@ write_files:
       echo "Tailscale IP: $TS_IP"
 
       echo "--- [Bootstrap] Creating Config Directory ---"
-            mkdir -p /etc/rancher/k3s
+      mkdir -p /etc/rancher/k3s
 
       echo "--- [Bootstrap] Generating K3s Config ---"
       cat > /etc/rancher/k3s/config.yaml <<EOF
@@ -74,6 +87,7 @@ write_files:
         - traefik
         - servicelb
         - cloud-controller
+      disable-cloud-controller: true
       etcd-s3: true
       etcd-s3-endpoint: storage.googleapis.com
       etcd-s3-access-key: ${s3_access_key}
@@ -83,12 +97,15 @@ write_files:
       etcd-snapshot-retention: 10
       kubelet-arg:
         - "cloud-provider=external"
+        - "provider-id=hcloud://$HCLOUD_ID"
         - "container-log-max-files=3"
         - "container-log-max-size=10Mi"
       ${k3s_cluster_setting}
       EOF
 
       echo "--- [Bootstrap] 4. Starting K3s Service ---"
+      systemctl stop k3s
+      fuser -k 10258/tcp || true # Force kill anything holding the CCM port
       systemctl enable k3s
       systemctl restart k3s
 
@@ -114,7 +131,6 @@ runcmd:
   - sleep 5
 
   # 2. Add Default Route Explicitly
-  # Forcing traffic to the gateway on the specific interface
   - ip route add default via ${network_gateway} dev enp7s0
 
   # 3. Tailscale Join
