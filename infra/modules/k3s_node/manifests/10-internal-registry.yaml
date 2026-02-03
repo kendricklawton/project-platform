@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-creds
+  namespace: platform-system
+type: Opaque
+stringData:
+  accessKey: "${RegistryS3AccessKey}"
+  secretKey: "${RegistryS3SecretKey}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: platform-system
+  labels:
+    app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: :5000
+            - name: REGISTRY_STORAGE
+              value: s3
+            - name: REGISTRY_STORAGE_S3_REGION
+              value: us-east-1
+            - name: REGISTRY_STORAGE_S3_BUCKET
+              value: "${RegistryS3Bucket}"
+            - name: REGISTRY_STORAGE_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: registry-creds
+                  key: accessKey
+            - name: REGISTRY_STORAGE_S3_SECRETKEY
+              valueFrom:
+                secretKeyRef:
+                  name: registry-creds
+                  key: secretKey
+            - name: REGISTRY_STORAGE_S3_REGIONENDPOINT
+              value: https://storage.googleapis.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: platform-system
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.0.50
+  selector:
+    app: registry
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000

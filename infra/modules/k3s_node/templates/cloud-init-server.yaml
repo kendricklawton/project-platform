@@ -15,7 +15,16 @@ write_files:
             dhcp4-overrides:
               use-routes: true
 
-  # 2. INJECT MANIFESTS SCRIPT
+  # 2. K3S REGISTRIES CONFIG
+  - path: /etc/rancher/k3s/registries.yaml
+    permissions: "0644"
+    content: |
+      mirrors:
+        "registry.platform-system:5000":
+          endpoint:
+            - "http://10.43.0.50:5000"
+
+  # 3. INJECT MANIFESTS SCRIPT
   - path: /usr/local/bin/inject-manifests.sh
     permissions: "0755"
     owner: root:root
@@ -90,9 +99,9 @@ write_files:
       disable-cloud-controller: true
       etcd-s3: true
       etcd-s3-endpoint: storage.googleapis.com
-      etcd-s3-access-key: ${s3_access_key}
-      etcd-s3-secret-key: ${s3_secret_key}
-      etcd-s3-bucket: ${s3_bucket}
+      etcd-s3-access-key: ${etcd_s3_access_key}
+      etcd-s3-secret-key: ${etcd_s3_secret_key}
+      etcd-s3-bucket: ${etcd_s3_bucket}
       etcd-snapshot-schedule-cron: "0 */6 * * *"
       etcd-snapshot-retention: 10
       kubelet-arg:

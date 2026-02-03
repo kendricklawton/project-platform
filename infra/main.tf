@@ -17,21 +17,24 @@ terraform {
   }
 }
 
-# --- AUTH & SECRETS ---
 variable "hcloud_token" { sensitive = true }
 variable "tailscale_auth_nat_key" { sensitive = true }
 variable "tailscale_auth_k3s_server_key" { sensitive = true }
 variable "tailscale_auth_k3s_agent_key" { sensitive = true }
+
 variable "etcd_s3_access_key" { sensitive = true }
 variable "etcd_s3_secret_key" { sensitive = true }
+variable "etcd_s3_bucket" { type = string }
 
-# --- CONFIGURATION ---
+variable "registry_s3_access_key" { sensitive = true }
+variable "registry_s3_secret_key" { sensitive = true }
+variable "registry_s3_bucket" { type = string }
+
 variable "project_name" { type = string }
 variable "cloud_env" { type = string }
 variable "ssh_key_name" { type = string }
 variable "letsencrypt_email" { type = string }
 variable "gcp_project_id" { type = string }
-variable "etcd_s3_bucket" { type = string }
 
 variable "image_version" { type = string }
 variable "hcloud_location" {
@@ -228,13 +231,14 @@ module "control_plane_init" {
   tailscale_auth_server_key = var.tailscale_auth_k3s_server_key
   hcloud_token              = var.hcloud_token
   hcloud_network_name       = hcloud_network.main.name
-  s3_access_key             = var.etcd_s3_access_key
-  s3_secret_key             = var.etcd_s3_secret_key
-  s3_bucket                 = var.etcd_s3_bucket
+  etcd_s3_access_key        = var.etcd_s3_access_key
+  etcd_s3_secret_key        = var.etcd_s3_secret_key
+  etcd_s3_bucket            = var.etcd_s3_bucket
 
-  # NOTE: network_gateway removed (uses module default 10.0.0.1)
+  registry_s3_access_key = var.registry_s3_access_key
+  registry_s3_secret_key = var.registry_s3_secret_key
+  registry_s3_bucket     = var.registry_s3_bucket
 
-  # Versions
   hcloud_ccm_version    = var.hcloud_ccm_version
   hcloud_csi_version    = var.hcloud_csi_version
   cilium_version        = var.cilium_version
@@ -277,21 +281,19 @@ module "control_plane_join" {
   tailscale_auth_server_key = var.tailscale_auth_k3s_server_key
   hcloud_token              = var.hcloud_token
   hcloud_network_name       = hcloud_network.main.name
-  s3_access_key             = var.etcd_s3_access_key
-  s3_secret_key             = var.etcd_s3_secret_key
-  s3_bucket                 = var.etcd_s3_bucket
-
-  # NOTE: network_gateway removed (uses module default 10.0.0.1)
-
-  # Versions
-  hcloud_ccm_version    = var.hcloud_ccm_version
-  hcloud_csi_version    = var.hcloud_csi_version
-  cilium_version        = var.cilium_version
-  ingress_nginx_version = var.ingress_nginx_version
-  cert_manager_version  = var.cert_manager_version
-  nats_version          = var.nats_version
-
-  depends_on = [time_sleep.wait_for_init_node]
+  etcd_s3_access_key        = var.etcd_s3_access_key
+  etcd_s3_secret_key        = var.etcd_s3_secret_key
+  etcd_s3_bucket            = var.etcd_s3_bucket
+  registry_s3_access_key    = var.registry_s3_access_key
+  registry_s3_secret_key    = var.registry_s3_secret_key
+  registry_s3_bucket        = var.registry_s3_bucket
+  hcloud_ccm_version        = var.hcloud_ccm_version
+  hcloud_csi_version        = var.hcloud_csi_version
+  cilium_version            = var.cilium_version
+  ingress_nginx_version     = var.ingress_nginx_version
+  cert_manager_version      = var.cert_manager_version
+  nats_version              = var.nats_version
+  depends_on                = [time_sleep.wait_for_init_node]
 }
 
 resource "hcloud_load_balancer_target" "api_targets_join" {
@@ -321,6 +323,7 @@ module "worker_agents" {
   hcloud_token             = var.hcloud_token
   hcloud_network_name      = hcloud_network.main.name
   depends_on               = [time_sleep.wait_for_init_node, module.control_plane_join]
+  letsencrypt_email        = var.letsencrypt_email
 }
 
 resource "hcloud_load_balancer_target" "ingress_targets" {

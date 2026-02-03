@@ -15,7 +15,16 @@ write_files:
             dhcp4-overrides:
               use-routes: true
 
-  # 2. GVISOR CONFIGURATION
+  # 2. K3S REGISTRIES CONFIG
+  - path: /etc/rancher/k3s/registries.yaml
+    permissions: "0644"
+    content: |
+      mirrors:
+        "registry.platform-system:5000":
+          endpoint:
+            - "http://10.43.0.50:5000"
+
+  # 3. GVISOR CONFIGURATION
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -28,7 +37,7 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-  # 3. K3S AGENT SERVICE
+  # 4. K3S AGENT SERVICE
   - path: /etc/systemd/system/k3s-agent.service
     permissions: "0644"
     content: |
@@ -52,7 +61,7 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  # 4. AGENT BOOTSTRAP SCRIPT
+  # 5. AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0755"
     owner: root:root

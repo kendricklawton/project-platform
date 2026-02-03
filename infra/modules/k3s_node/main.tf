@@ -35,13 +35,13 @@ variable "k3s_init" {
 variable "tailscale_auth_server_key" {
   type      = string
   sensitive = true
-  default   = ""
+  default   = null
 }
 
 variable "tailscale_auth_agent_key" {
   type      = string
   sensitive = true
-  default   = ""
+  default   = null
 }
 
 variable "network_gateway" {
@@ -52,32 +52,48 @@ variable "network_gateway" {
 variable "hcloud_token" {
   type      = string
   sensitive = true
-  default   = ""
 }
 
 variable "hcloud_network_name" {
+  type = string
+}
+
+variable "etcd_s3_access_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "etcd_s3_secret_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "etcd_s3_bucket" {
   type    = string
   default = ""
 }
 
-variable "s3_access_key" {
-  type    = string
-  default = null
+variable "registry_s3_access_key" {
+  type      = string
+  sensitive = true
+  default   = ""
 }
 
-variable "s3_secret_key" {
-  type    = string
-  default = null
+variable "registry_s3_secret_key" {
+  type      = string
+  sensitive = true
+  default   = ""
 }
 
-variable "s3_bucket" {
+variable "registry_s3_bucket" {
   type    = string
-  default = null
+  default = ""
 }
 
 variable "letsencrypt_email" {
-  type    = string
-  default = ""
+  type = string
 }
 
 # Component Versions
@@ -127,6 +143,11 @@ locals {
       CloudEnv         = var.cloud_env
     })
     "09-gvisor-runtimeclass.yaml" = file("${path.module}/manifests/09-gvisor-runtimeclass.yaml")
+    "10-internal-registry.yaml" = templatefile("${path.module}/manifests/10-internal-registry.yaml", {
+      RegistryS3Bucket    = var.registry_s3_bucket
+      RegistryS3AccessKey = var.registry_s3_access_key
+      RegistryS3SecretKey = var.registry_s3_secret_key
+    })
   }
 
   manifest_injector_script = join("\n", [
@@ -165,9 +186,9 @@ resource "hcloud_server" "node" {
       k3s_init                  = var.k3s_init
       load_balancer_ip          = var.load_balancer_ip
       k3s_cluster_setting       = local.k3s_cluster_setting
-      s3_access_key             = var.s3_access_key
-      s3_secret_key             = var.s3_secret_key
-      s3_bucket                 = var.s3_bucket
+      etcd_s3_access_key        = var.etcd_s3_access_key
+      etcd_s3_secret_key        = var.etcd_s3_secret_key
+      etcd_s3_bucket            = var.etcd_s3_bucket
       tailscale_auth_server_key = var.tailscale_auth_server_key
       network_gateway           = var.network_gateway
       manifest_injector_script  = local.manifest_injector_script

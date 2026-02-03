@@ -76,14 +76,20 @@ tasks:
     cmds:
       - |
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
+        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
+        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
+        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
+        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
 
         {{.TF_CMD}} plan {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${BUCKET}" \
-          -var="etcd_s3_access_key=${ACCESS}" \
-          -var="etcd_s3_secret_key=${SECRET}"
+          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
+          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
+          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
+          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
+          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
+          -var="registry_s3_secret_key=${REGISTRY_SECRET}"
 
   infra:apply:
     desc: "Apply changes to infrastructure"
@@ -92,14 +98,20 @@ tasks:
     cmds:
       - |
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
+        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
+        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
+        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
+        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
 
         {{.TF_CMD}} apply -auto-approve {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${BUCKET}" \
-          -var="etcd_s3_access_key=${ACCESS}" \
-          -var="etcd_s3_secret_key=${SECRET}"
+          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
+          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
+          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
+          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
+          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
+          -var="registry_s3_secret_key=${REGISTRY_SECRET}"
 
   infra:kubeconfig:
     desc: "Fetch Kubeconfig from leader via Tailscale MagicDNS"
