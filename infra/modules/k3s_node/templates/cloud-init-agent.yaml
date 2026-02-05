@@ -13,7 +13,7 @@ write_files:
           enp7s0:
             dhcp4: true
             dhcp4-overrides:
-              use-routes: true
+              use-routes: false
 
   # 2. K3S REGISTRIES CONFIG
   - path: /etc/rancher/k3s/registries.yaml
@@ -63,7 +63,7 @@ write_files:
 
   # 5. AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
-    permissions: "0755"
+    permissions: "0700"
     owner: root:root
     content: |
       #!/bin/bash
@@ -124,8 +124,7 @@ runcmd:
     until tailscale up --authkey=${tailscale_auth_agent_key} \
       --ssh \
       --hostname=${hostname} \
-      --advertise-tags="tag:k3s-agent" \
-      --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+      --advertise-tags="tag:k3s-agent" >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
     do
        echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
        sleep 5
@@ -134,3 +133,140 @@ runcmd:
 
   # 5. Run Bootstrap
   - /usr/local/bin/k3s-start.sh
+
+# #cloud-config
+# hostname: ${hostname}
+# manage_etc_hosts: true
+
+# write_files:
+#   # 1. RESTORE NETPLAN
+#   - path: /etc/netplan/60-private-net.yaml
+#     permissions: "0600"
+#     content: |
+#       network:
+#         version: 2
+#         ethernets:
+#           enp7s0:
+#             dhcp4: true
+#             dhcp4-overrides:
+#               use-routes: true
+
+#   # 2. K3S REGISTRIES CONFIG
+#   - path: /etc/rancher/k3s/registries.yaml
+#     permissions: "0644"
+#     content: |
+#       mirrors:
+#         "registry.platform-system:5000":
+#           endpoint:
+#             - "http://10.43.0.50:5000"
+
+#   # 3. GVISOR CONFIGURATION
+#   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+#     permissions: "0644"
+#     content: |
+#       [plugins.opt]
+#         path = "{{ .NodeConfig.Containerd.Opt }}"
+#       [plugins.cri]
+#         stream_server_address = "127.0.0.1"
+#         stream_server_port = "10010"
+#         enable_selinux = {{ .NodeConfig.SELinux }}
+#       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+#         runtime_type = "io.containerd.runsc.v1"
+
+#   # 4. K3S AGENT SERVICE
+#   - path: /etc/systemd/system/k3s-agent.service
+#     permissions: "0644"
+#     content: |
+#       [Unit]
+#       Description=Lightweight Kubernetes
+#       Documentation=https://k3s.io
+#       Wants=network-online.target
+#       After=network-online.target
+
+#       [Service]
+#       Type=notify
+#       EnvironmentFile=-/etc/default/k3s
+#       EnvironmentFile=-/etc/sysconfig/k3s
+#       EnvironmentFile=-/etc/systemd/system/k3s.service.env
+#       ExecStart=/usr/local/bin/k3s agent
+#       KillMode=process
+#       Delegate=yes
+#       LimitNOFILE=1048576
+#       LimitNPROC=infinity
+
+#       [Install]
+#       WantedBy=multi-user.target
+
+#   # 5. AGENT BOOTSTRAP SCRIPT
+#   - path: /usr/local/bin/k3s-start.sh
+#     permissions: "0700"
+#     owner: root:root
+#     content: |
+#       #!/bin/bash
+#       set -e
+
+#       echo "[Bootstrap] Starting Tailscale Join Loop..."
+#       for i in {1..30}; do
+#         TS_IP=$(tailscale ip -4 2>/dev/null)
+#         if [ -n "$TS_IP" ]; then break; fi
+#         sleep 2
+#       done
+
+#       if [ -z "$TS_IP" ]; then
+#         echo "CRITICAL: Could not get Tailscale IP"
+#         exit 1
+#       fi
+#       echo "Tailscale IP: $TS_IP"
+
+#       echo "--- [Bootstrap] Creating Config Directory ---"
+#       mkdir -p /etc/rancher/k3s
+
+#       echo "--- [Bootstrap] Generating K3s Config ---"
+#       cat > /etc/rancher/k3s/config.yaml <<EOF
+#       server: https://${k3s_url}
+#       token: ${k3s_token}
+#       node-ip: $(hostname -I | awk '{print $1}')
+#       node-external-ip: $TS_IP
+#       kubelet-arg:
+#         - "cloud-provider=external"
+#         - "container-log-max-files=3"
+#         - "container-log-max-size=10Mi"
+#       EOF
+
+#       echo "--- [Bootstrap] Starting K3s Agent ---"
+#       systemctl daemon-reload
+#       systemctl enable k3s-agent
+#       systemctl start k3s-agent
+#       echo "=== Agent Bootstrap Complete ==="
+
+# runcmd:
+#   # 1. Apply Netplan
+#   - netplan generate
+#   - netplan apply
+#   - sleep 5
+
+#   # 2. Add Default Route Explicitly
+#   - ip route add default via ${network_gateway} dev enp7s0
+
+#   # 3. Time Sync
+#   - systemctl enable systemd-timesyncd
+#   - systemctl start systemd-timesyncd
+#   - timedatectl set-ntp true
+
+#   # 4. Tailscale Join
+#   - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
+#   - |
+#     NEXT_WAIT_TIME=0
+#     until tailscale up --authkey=${tailscale_auth_agent_key} \
+#       --ssh \
+#       --hostname=${hostname} \
+#       --advertise-tags="tag:k3s-agent" \
+#       --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+#     do
+#        echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+#        sleep 5
+#        NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
+#     done
+
+#   # 5. Run Bootstrap
+#   - /usr/local/bin/k3s-start.sh

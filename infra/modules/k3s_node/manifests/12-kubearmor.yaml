@@ -1,0 +1,28 @@
+# infra/modules/k3s_node/manifests/12-kubearmor.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubearmor
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: kubearmor
+  namespace: kube-system
+spec:
+  chart: kubearmor
+  repo: https://kubearmor.github.io/charts
+  targetNamespace: kubearmor
+  createNamespace: true
+  version: "${KubeArmorVersion}"
+  bootstrap: true
+  valuesContent: |-
+    environment:
+      name: k3s
+    kubearmor:
+      resources:
+        limits:
+          memory: 150Mi # <--- The "Skinny Boy" Setting
+        requests:
+          cpu: 50m
+          memory: 64Mi

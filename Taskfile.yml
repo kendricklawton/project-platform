@@ -1,41 +1,58 @@
+#  INFRASTRUCTURE TASKFILE
 version: "3"
 
 dotenv: [".env"]
 
 vars:
+  #  GLOBAL CONFIGURATION
   TF_DIR: "infra"
   PACKER_DIR: "packer"
   CLOUD_ENV: '{{.CLOUD_ENV | default "dev"}}'
-  KUBECONFIG_PATH: ".kube/config"
-  IMAGE_VERSION: '{{.IMAGE_VERSION | default "v1"}}'
+  KEY_NAME: "{{.KEY_NAME}}"
+  KUBECONFIG_PATH: "kube/config"
   HCLOUD_LOCATION: '{{.HCLOUD_LOCATION | default "ash"}}'
   LETSENCRYPT_EMAIL: "{{.LETSENCRYPT_EMAIL}}"
-  BUILD_SERVER_TYPE: '{{if eq .CLOUD_ENV "prod"}}cpx41{{else}}cpx21{{end}}'
 
-  # SOFTWARE VERSIONS (Single Source of Truth)
-  # Used by Packer
+  #  BUILD STRATEGY (Hetzner)
+  K3S_SERVER_TYPE: "cpx21"
+  NAT_SERVER_TYPE: "cpx11"
+  IMAGE: "{{.IMAGE}}"
+
+  # VERSION PINNING & MEMORY BUDGET
+  # Base Infrastructure
+  # K3s combines API/Etcd/Controller into one binary.
+  # - Server Node: ~800MB - 1GB (Depending on load)
+  # - Agent Node:  ~300MB - 400MB (Idle)
   K3S_VERSION: "v1.29.1+k3s2"
+
+  # Helm is just a CLI tool used during build/deploy.
+  # - Runtime RAM: 0MB (It does not run as a service on the cluster)
   HELM_VERSION: "v3.14.2"
 
-  # MANIFEST VERSIONS (Now passed to Terraform)
-  HCLOUD_CCM_VERSION: "1.29.1"
-  HCLOUD_CSI_VERSION: "2.6.0"
-  CILIUM_VERSION: "1.15.1"
-  INGRESS_NGINX_VERSION: "4.10.0"
-  CERT_MANAGER_VERSION: "v1.14.0"
-  NATS_VERSION: "1.2.4"
+  # Core Networking & Storage
+  HCLOUD_CCM_VERSION: "1.29.1" # ~50MB (Connects K3s to Hetzner API)
+  HCLOUD_CSI_VERSION: "2.6.0" # ~50MB (Mounts Volumes)
+  CILIUM_VERSION: "1.15.1" # ~300MB (Critical: eBPF Firewall/Networking)
+  INGRESS_NGINX_VERSION: "4.10.0" # ~200MB (The entry door for all traffic)
+  CERT_MANAGER_VERSION: "v1.14.0" # ~120MB (Auto-renews SSL Certs)
+  NATS_VERSION: "1.2.4" # ~150MB (Messaging/Queue for Platform)
 
-  # Terraform Command Wrapper
+  # 🚀 THE "SKINNY BOY" STACK (Security & Observability)
+  # Total Additional RAM: ~800MB (vs ~2.5GB for the "Chunky" stack)
+  KUBEARMOR_VERSION: "1.3.1" # ~100MB (Enforcement vs Falco's 800MB)
+  FLUENT_BIT_VERSION: "0.44.0" # ~80MB  (Log Shipping agent)
+  VM_VERSION: "0.14.0" # ~250MB (VictoriaMetrics: Metrics DB)
+  LOKI_VERSION: "5.43.3" # ~300MB (Loki: Log DB)
+  GRAFANA_VERSION: "7.3.0" # ~80MB  (Visual Dashboard)
+
+  # TERRAFORM WRAPPERS
   TF_CMD: >-
-    export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/keys/gcp-tf-state-sa-{{.CLOUD_ENV}}.json" &&
+    export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/keys/{{.KEY_NAME}}-{{.CLOUD_ENV}}.json" &&
     terraform -chdir={{.TF_DIR}}
 
-  # Variables passed to Terraform
-  # We now inject the versions here instead of into the Go binary
   TF_VARS: >-
     -var="cloud_env={{.CLOUD_ENV}}"
     -var="hcloud_location={{.HCLOUD_LOCATION}}"
-    -var="image_version={{.IMAGE_VERSION}}"
     -var="gcp_project_id={{.GCP_PROJECT_ID}}"
     -var="project_name={{.PROJECT_NAME}}"
     -var="hcloud_token={{.HCLOUD_TOKEN}}"
@@ -50,28 +67,37 @@ vars:
     -var="ingress_nginx_version={{.INGRESS_NGINX_VERSION}}"
     -var="cert_manager_version={{.CERT_MANAGER_VERSION}}"
     -var="nats_version={{.NATS_VERSION}}"
+    -var="kubearmor_version={{.KUBEARMOR_VERSION}}"
+    -var="fluent_bit_version={{.FLUENT_BIT_VERSION}}"
+    -var="registry_htpasswd={{.REGISTRY_HTPASSWD}}"
+    -var="vm_version={{.VM_VERSION}}"
+    -var="loki_version={{.LOKI_VERSION}}"
+    -var="grafana_version={{.GRAFANA_VERSION}}"
 
 tasks:
   _tf_init:
     internal: true
+    desc: "Helper: Initialize Terraform Backend"
     cmds:
       - echo "🔧 Initializing {{.CLOUD_ENV}} state..."
       - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
 
   packer:build:
-    desc: "Build Golden Images with PINNED K3s"
+    desc: "Build Golden Image (Ubuntu + K3s + Helm)"
     cmds:
       - packer init {{.PACKER_DIR}}
       - >-
         packer build
         -var "hcloud_token={{.HCLOUD_TOKEN}}"
-        -var "server_type={{.BUILD_SERVER_TYPE}}"
+        -var "nat_server_type={{.NAT_SERVER_TYPE}}"
+        -var "k3s_server_type={{.K3S_SERVER_TYPE}}"
         -var "k3s_version={{.K3S_VERSION}}"
         -var "helm_version={{.HELM_VERSION}}"
-        {{.PACKER_DIR}}/ubuntu-k3s.pkr.hcl
+        -var "image={{.IMAGE}}"
+        {{.PACKER_DIR}}/ubuntu.pkr.hcl
 
   infra:plan:
-    desc: "Generate and show Terraform Plan"
+    desc: "Terraform Plan"
     deps: [_tf_init]
     cmds:
       - |
@@ -82,6 +108,9 @@ tasks:
         REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
         REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
         REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
+        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
+        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
+        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
 
         {{.TF_CMD}} plan {{.TF_VARS}} \
           -var="etcd_s3_bucket=${ETCD_BUCKET}" \
@@ -89,10 +118,13 @@ tasks:
           -var="etcd_s3_secret_key=${ETCD_SECRET}" \
           -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
           -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
-          -var="registry_s3_secret_key=${REGISTRY_SECRET}"
+          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
+          -var="logs_s3_bucket=${LOGS_BUCKET}" \
+          -var="logs_s3_access_key=${LOGS_ACCESS}" \
+          -var="logs_s3_secret_key=${LOGS_SECRET}"
 
   infra:apply:
-    desc: "Apply changes to infrastructure"
+    desc: "Terraform Apply"
     prompt: "⚠️  Applying to {{.CLOUD_ENV}} ({{.HCLOUD_LOCATION}}). Proceed?"
     deps: [_tf_init]
     cmds:
@@ -104,6 +136,9 @@ tasks:
         REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
         REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
         REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
+        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
+        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
+        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
 
         {{.TF_CMD}} apply -auto-approve {{.TF_VARS}} \
           -var="etcd_s3_bucket=${ETCD_BUCKET}" \
@@ -111,50 +146,62 @@ tasks:
           -var="etcd_s3_secret_key=${ETCD_SECRET}" \
           -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
           -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
-          -var="registry_s3_secret_key=${REGISTRY_SECRET}"
+          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
+          -var="logs_s3_bucket=${LOGS_BUCKET}" \
+          -var="logs_s3_access_key=${LOGS_ACCESS}" \
+          -var="logs_s3_secret_key=${LOGS_SECRET}"
 
   infra:kubeconfig:
-    desc: "Fetch Kubeconfig from leader via Tailscale MagicDNS"
+    desc: "Fetch Kubeconfig via Tailscale"
     vars:
       DNS_NAME: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-01"
       SSH_TARGET: "{{.DNS_NAME}}"
     cmds:
       - mkdir -p .kube
-      - echo "⏳ Checking connection to {{.SSH_TARGET}}..."
       - until ssh -q {{.SSH_TARGET}} exit; do sleep 5; done
-      - echo "📥 Fetching Kubeconfig..."
       - scp {{.SSH_TARGET}}:/etc/rancher/k3s/k3s.yaml {{.KUBECONFIG_PATH}}
-      - echo "Rx Adjusting API Server Address..."
       - sed -i.bak "s/127.0.0.1/{{.DNS_NAME}}/g" {{.KUBECONFIG_PATH}} && rm -f {{.KUBECONFIG_PATH}}.bak
       - chmod 600 {{.KUBECONFIG_PATH}}
-      - echo "✅ Kubeconfig secured. Context ready."
+      - echo "✅ Kubeconfig secured."
 
   infra:deploy:
-    desc: "Full Pipeline: Plan -> Apply -> Config"
+    desc: "Full Pipeline: Plan -> Apply -> Kubeconfig"
     cmds:
       - task: infra:plan
       - task: infra:apply
       - task: infra:kubeconfig
 
   infra:destroy:
-    desc: "Nuke infrastructure for specific environment"
+    desc: "TEARDOWN"
     prompt: "❌ DESTROY {{.CLOUD_ENV}}? This cannot be undone."
     deps: [_tf_init]
     cmds:
       - |
         ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
+        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
+        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
+        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
+        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
+        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
+        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
+        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
+        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
 
         {{.TF_CMD}} destroy -auto-approve {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${BUCKET}" \
-          -var="etcd_s3_access_key=${ACCESS}" \
-          -var="etcd_s3_secret_key=${SECRET}"
+          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
+          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
+          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
+          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
+          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
+          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
+          -var="logs_s3_bucket=${LOGS_BUCKET}" \
+          -var="logs_s3_access_key=${LOGS_ACCESS}" \
+          -var="logs_s3_secret_key=${LOGS_SECRET}"
       - rm -f {{.KUBECONFIG_PATH}}
 
   dev:web:
-    desc: "Start web server"
+    desc: "Start local web development server"
     dir: web
     cmds:
       - npm run dev

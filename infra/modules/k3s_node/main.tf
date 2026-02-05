@@ -9,23 +9,18 @@ terraform {
 variable "hostname" { type = string }
 variable "cloud_env" { type = string }
 variable "location" { type = string }
-variable "server_type" { type = string }
 variable "ssh_key_ids" { type = list(string) }
 variable "network_id" { type = string }
 variable "project_name" { type = string }
 variable "node_role" { type = string }
 variable "k3s_token" { type = string }
 variable "load_balancer_ip" { type = string }
-
 variable "private_ip" {
   type    = string
-  default = null
+  default = ""
 }
-
-variable "image" {
-  type    = string
-  default = "ubuntu-24.04"
-}
+variable "image" { type = string }
+variable "server_type" { type = string }
 
 variable "k3s_init" {
   type    = bool
@@ -35,28 +30,23 @@ variable "k3s_init" {
 variable "tailscale_auth_server_key" {
   type      = string
   sensitive = true
-  default   = null
+  default   = ""
 }
 
 variable "tailscale_auth_agent_key" {
   type      = string
   sensitive = true
-  default   = null
+  default   = ""
 }
 
-variable "network_gateway" {
-  type    = string
-  default = "10.0.0.1"
-}
+variable "network_gateway" { default = "10.0.0.1" }
 
 variable "hcloud_token" {
   type      = string
   sensitive = true
 }
 
-variable "hcloud_network_name" {
-  type = string
-}
+variable "hcloud_network_name" { type = string }
 
 variable "etcd_s3_access_key" {
   type      = string
@@ -71,6 +61,23 @@ variable "etcd_s3_secret_key" {
 }
 
 variable "etcd_s3_bucket" {
+  type    = string
+  default = ""
+}
+
+variable "logs_s3_access_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "logs_s3_secret_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "logs_s3_bucket" {
   type    = string
   default = ""
 }
@@ -92,11 +99,32 @@ variable "registry_s3_bucket" {
   default = ""
 }
 
-variable "letsencrypt_email" {
-  type = string
+variable "registry_htpasswd" {
+  type      = string
+  sensitive = true
+  default   = ""
 }
 
-# Component Versions
+variable "letsencrypt_email" {
+  type    = string
+  default = ""
+}
+
+variable "loki_version" {
+  type    = string
+  default = ""
+}
+
+variable "grafana_version" {
+  type    = string
+  default = ""
+}
+
+variable "victoria_metrics_version" {
+  type    = string
+  default = ""
+}
+
 variable "hcloud_ccm_version" {
   type    = string
   default = ""
@@ -127,6 +155,16 @@ variable "nats_version" {
   default = ""
 }
 
+variable "kubearmor_version" {
+  type    = string
+  default = ""
+}
+
+variable "fluent_bit_version" {
+  type    = string
+  default = ""
+}
+
 locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 
@@ -147,7 +185,22 @@ locals {
       RegistryS3Bucket    = var.registry_s3_bucket
       RegistryS3AccessKey = var.registry_s3_access_key
       RegistryS3SecretKey = var.registry_s3_secret_key
+      RegistryHtpasswd    = var.registry_htpasswd
     })
+    "11-cilium-deny-metadata.yaml" = file("${path.module}/manifests/11-cilium-deny-metadata.yaml")
+    "12-kubearmor.yaml" = templatefile("${path.module}/manifests/12-kubearmor.yaml", {
+      KubearmorVersion = var.kubearmor_version
+      LogsBucket       = var.logs_s3_bucket
+    })
+    "13-fluent-bit.yaml" = templatefile("${path.module}/manifests/13-fluent-bit.yaml", {
+      FluentBitVersion = var.fluent_bit_version
+      LogsBucket       = var.logs_s3_bucket
+      LogsAccessKey    = var.logs_s3_access_key
+      LogsSecretKey    = var.logs_s3_secret_key
+    })
+    "14-victoria-metrics.yaml" = templatefile("${path.module}/manifests/14-victoria-metrics.yaml", { VictoriaMetricsVersion = var.victoria_metrics_version })
+    "15-loki.yaml"             = templatefile("${path.module}/manifests/15-loki.yaml", { LokiVersion = var.loki_version })
+    "16-grafana.yaml"          = templatefile("${path.module}/manifests/16-grafana.yaml", { GrafanaVersion = var.grafana_version })
   }
 
   manifest_injector_script = join("\n", [

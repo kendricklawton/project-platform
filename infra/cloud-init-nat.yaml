@@ -2,27 +2,21 @@
 hostname: ${hostname}
 package_update: true
 
-# -----------------------------------------------------------------------------
 # BOOTCMD: EARLY INITIALIZATION
-# -----------------------------------------------------------------------------
 # Purpose: Pre-seed debconf answers to prevent interactive prompts from hanging
 # the installation of iptables-persistent during the 'packages' phase.
 bootcmd:
   - echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
   - echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
 
-# -----------------------------------------------------------------------------
 # PACKAGES
-# -----------------------------------------------------------------------------
 packages:
   - iptables-persistent # Saves firewall rules across reboots
   - curl
   - jq
   - fail2ban # Protects SSH from brute force
 
-# -----------------------------------------------------------------------------
 # RUNCMD: EXECUTION ORDER
-# -----------------------------------------------------------------------------
 runcmd:
   # 1. Security: Disable UFW
   # We use raw iptables for NAT; UFW can conflict with custom forwarding rules.

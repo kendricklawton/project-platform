@@ -12,62 +12,81 @@ variable "hcloud_token" {
   sensitive = true
 }
 
-variable "image_version" {
-  type    = string
-  default = "v1"
-}
+variable "image" { type = string }
+variable "nat_server_type" { type = string }
+variable "k3s_server_type" { type = string }
+variable "k3s_version" { type = string }
+variable "helm_version" { type = string }
 
-variable "server_type" {
-  type    = string
-  default = "cpx21"
-}
-
-variable "k3s_version" {
-  type    = string
-}
-
-variable "helm_version" {
-  type    = string
-}
-
-source "hcloud" "ash" {
+# SOURCES: K3S BASE
+source "hcloud" "k3s_ash" {
   token         = var.hcloud_token
-  image         = "ubuntu-24.04"
+  image         = var.image
   location      = "ash"
-  server_type   = var.server_type
+  server_type   = var.k3s_server_type
   ssh_username  = "root"
-  snapshot_name = "k3s-base-ash-${var.image_version}"
+  snapshot_name = "k3s-base-ash-v1"
   snapshot_labels = {
     role    = "k3s-base"
     region  = "ash"
-    version = var.image_version
+    version = "v1"
   }
 }
 
-source "hcloud" "hil" {
+source "hcloud" "k3s_hil" {
   token         = var.hcloud_token
-  image         = "ubuntu-24.04"
+  image         = var.image
   location      = "hil"
-  server_type   = var.server_type
+  server_type   = var.k3s_server_type
   ssh_username  = "root"
-  snapshot_name = "k3s-base-hil-${var.image_version}"
+  snapshot_name = "k3s-base-hil-v1"
   snapshot_labels = {
     role    = "k3s-base"
     region  = "hil"
-    version = var.image_version
+    version = "v1"
   }
 }
 
-build {
-  sources = ["source.hcloud.ash", "source.hcloud.hil"]
+# SOURCES: NAT BASE
+source "hcloud" "nat_ash" {
+  token         = var.hcloud_token
+  image         = var.image
+  location      = "ash"
+  server_type   = var.nat_server_type
+  ssh_username  = "root"
+  snapshot_name = "nat-base-ash-v1"
+  snapshot_labels = {
+    role    = "nat-base"
+    region  = "ash"
+    version = "v1"
+  }
+}
 
-  # Main Build Script
+source "hcloud" "nat_hil" {
+  token         = var.hcloud_token
+  image         = var.image
+  location      = "hil"
+  server_type   = var.nat_server_type
+  ssh_username  = "root"
+  snapshot_name = "nat-base-hil-v1"
+  snapshot_labels = {
+    role    = "nat-base"
+    region  = "hil"
+    version = "v1"
+  }
+}
+
+# BUILD: K3S
+build {
+  name    = "k3s"
+  sources = ["source.hcloud.k3s_ash", "source.hcloud.k3s_hil"]
+
   provisioner "shell" {
     inline = [
       "export DEBIAN_FRONTEND=noninteractive",
       "apt-get update && apt-get upgrade -y",
 
-      # Install Basic Tools (Added 'jq' for JSON processing)
+      # Install Basic Tools
       "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping jq",
 
       # Time Sync
@@ -99,7 +118,7 @@ build {
       "systemctl enable tailscaled",
       "rm -f /var/lib/tailscale/tailscaled.state",
 
-      # Pre-bake K3s binary (Do not start service yet)
+      # Pre-bake K3s binary
       "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
 
       # DNS Hardening (Force Public DNS, disable systemd stub)
@@ -129,8 +148,15 @@ build {
 
       "sysctl --system",
 
+      # Install & Run Trivy (Security Scanning)
+      "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -",
+      "echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | tee -a /etc/apt/sources.list.d/trivy.list",
+      "apt-get update && apt-get install -y trivy",
+
+      # Run Scan (Fail build if CRITICAL vulnerabilities found)
+      "trivy filesystem --exit-code 1 --severity CRITICAL --ignore-unfixed /",
+
       # Log Rotation & Limits
-      # Removed infra-bootstrap.log; keeping tailscale-join.log
       "cat > /etc/logrotate.d/k3s-bootstrap <<EOF",
       "/var/log/tailscale-join.log {",
       "    size 10M",
@@ -142,7 +168,7 @@ build {
       "}",
       "EOF",
 
-      # Keep Journald capped at 1GB (Protects disk space)
+      # Keep Journald capped at 1GB
       "sed -i 's/#SystemMaxUse=/SystemMaxUse=1G/g' /etc/systemd/journald.conf",
       "sed -i 's/#SystemKeepFree=/SystemKeepFree=1G/g' /etc/systemd/journald.conf",
 
@@ -150,6 +176,47 @@ build {
       "apt-get clean",
       "rm -rf /var/lib/apt/lists/*",
       "rm -f /etc/netplan/50-cloud-init.yaml",
+      "cloud-init clean --logs --seed",
+      "rm -f /etc/machine-id /var/lib/dbus/machine-id",
+      "truncate -s 0 /etc/hostname"
+    ]
+  }
+}
+
+# BUILD: NAT
+build {
+  name    = "nat"
+  sources = ["source.hcloud.nat_ash", "source.hcloud.nat_hil"]
+
+  provisioner "shell" {
+    inline = [
+      "export DEBIAN_FRONTEND=noninteractive",
+      "apt-get update && apt-get upgrade -y",
+
+      # 1. Install Packages (from infra/cloud-init-nat.yaml)
+      # Pre-seed debconf to avoid interactive prompts for iptables-persistent
+      "echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections",
+      "echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections",
+      "apt-get install -y iptables-persistent curl jq fail2ban",
+
+      # 2. Security: Disable UFW (We use raw iptables for NAT)
+      "ufw disable",
+
+      # 3. Networking: Enable IP Forwarding
+      "sysctl -w net.ipv4.ip_forward=1",
+      "echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf",
+
+      # 4. Security: Configure Fail2Ban
+      "systemctl enable fail2ban",
+
+      # 5. Software: Install Tailscale (Binaries only)
+      "curl -fsSL https://tailscale.com/install.sh | sh",
+      "systemctl enable tailscaled",
+      "rm -f /var/lib/tailscale/tailscaled.state",
+
+      # 6. Cleanup
+      "apt-get clean",
+      "rm -rf /var/lib/apt/lists/*",
       "cloud-init clean --logs --seed",
       "rm -f /etc/machine-id /var/lib/dbus/machine-id",
       "truncate -s 0 /etc/hostname"

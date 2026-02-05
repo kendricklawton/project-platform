@@ -12,6 +12,8 @@ spec:
   valuesContent: |-
     k8sServiceHost: ${K8sServiceHost}
     k8sServicePort: 6443
+    mtu: 1400 # Safe value for Hetzner Cloud + VXLAN
+    tunnel: vxlan
     ipam:
       mode: kubernetes
     operator:
