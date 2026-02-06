@@ -1,0 +1,17 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: knative-eventing-nats
+  namespace: kube-system
+spec:
+  # Using the official NATS controller for Knative
+  chart: eventing-nats
+  repo: https://knative-sandbox.github.io/knative-on-helm
+  targetNamespace: knative-eventing
+  version: "${KnativeVersion}"
+  bootstrap: true
+  valuesContent: |-
+    config:
+      nats:
+        # Point to your existing NATS service in the nats namespace
+        url: nats://nats.nats.svc.cluster.local:4222

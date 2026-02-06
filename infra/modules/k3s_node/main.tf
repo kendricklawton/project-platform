@@ -39,7 +39,7 @@ variable "tailscale_auth_agent_key" {
   default   = ""
 }
 
-variable "network_gateway" { default = "10.0.0.1" }
+# We are using the Public IP gateway (DHCP).
 
 variable "hcloud_token" {
   type      = string
@@ -155,6 +155,11 @@ variable "nats_version" {
   default = ""
 }
 
+variable "kyverno_version" {
+  type    = string
+  default = ""
+}
+
 variable "kubearmor_version" {
   type    = string
   default = ""
@@ -165,42 +170,118 @@ variable "fluent_bit_version" {
   default = ""
 }
 
+variable "argocd_version" {
+  type    = string
+  default = ""
+}
+
+variable "knative_version" {
+  type    = string
+  default = ""
+}
+
 locals {
   k3s_cluster_setting = var.k3s_init ? "cluster-init: true" : "server: https://${var.load_balancer_ip}:6443"
 
   manifest_files = {
-    "01-hcloud-secret.yaml" = templatefile("${path.module}/manifests/01-hcloud-secret.yaml", { HcloudToken = var.hcloud_token, HcloudNetwork = var.hcloud_network_name })
-    "02-hcloud-ccm.yaml"    = templatefile("${path.module}/manifests/02-hcloud-ccm.yaml", { HcloudCCMVersion = var.hcloud_ccm_version, HcloudNetwork = var.hcloud_network_name })
-    "03-hcloud-csi.yaml"    = templatefile("${path.module}/manifests/03-hcloud-csi.yaml", { HcloudCSIVersion = var.hcloud_csi_version })
-    "04-cilium.yaml"        = templatefile("${path.module}/manifests/04-cilium.yaml", { CiliumVersion = var.cilium_version, K8sServiceHost = var.load_balancer_ip })
-    "05-ingress-nginx.yaml" = templatefile("${path.module}/manifests/05-ingress-nginx.yaml", { IngressNginxVersion = var.ingress_nginx_version })
-    "06-nats.yaml"          = templatefile("${path.module}/manifests/06-nats.yaml", { NatsVersion = var.nats_version })
-    "07-cert-manager.yaml"  = templatefile("${path.module}/manifests/07-cert-manager.yaml", { CertManagerVersion = var.cert_manager_version })
-    "08-letsencrypt-issuer.yaml" = templatefile("${path.module}/manifests/08-letsencrypt-issuer.yaml", {
+    # Core
+    "000-hcloud-secret.yaml" = templatefile("${path.module}/manifests/00-core/000-hcloud-secret.yaml", {
+      HcloudToken   = var.hcloud_token,
+      HcloudNetwork = var.hcloud_network_name
+    })
+    "001-hcloud-ccm.yaml" = templatefile("${path.module}/manifests/00-core/001-hcloud-ccm.yaml", {
+      HcloudCCMVersion = var.hcloud_ccm_version,
+      HcloudNetwork    = var.hcloud_network_name
+    })
+    "002-hcloud-csi.yaml" = templatefile("${path.module}/manifests/00-core/002-hcloud-csi.yaml", {
+      HcloudCSIVersion = var.hcloud_csi_version
+    })
+    "003-gvisor-runtime.yaml" = templatefile("${path.module}/manifests/00-core/003-gvisor-runtime.yaml", {
+      CiliumVersion  = var.cilium_version,
+      K8sServiceHost = var.load_balancer_ip
+    })
+    "100-cilium.yaml" = templatefile("${path.module}/manifests/01-network/100-cilium.yaml", {
+      CiliumVersion  = var.cilium_version,
+      K8sServiceHost = var.load_balancer_ip
+    })
+    "101-ingress-nginx.yaml" = templatefile("${path.module}/manifests/01-network/101-ingress-nginx.yaml", {
+      IngressNginxVersion = var.ingress_nginx_version
+    })
+    "102-cert-manager.yaml" = templatefile("${path.module}/manifests/01-network/102-cert-manager.yaml", {
+      CertManagerVersion = var.cert_manager_version
+    })
+    "103-letsencrypt-issuer.yaml" = templatefile("${path.module}/manifests/01-network/103-letsencrypt-issuer.yaml", {
       LetsEncryptEmail = var.letsencrypt_email,
       CloudEnv         = var.cloud_env
     })
-    "09-gvisor-runtimeclass.yaml" = file("${path.module}/manifests/09-gvisor-runtimeclass.yaml")
-    "10-internal-registry.yaml" = templatefile("${path.module}/manifests/10-internal-registry.yaml", {
-      RegistryS3Bucket    = var.registry_s3_bucket
-      RegistryS3AccessKey = var.registry_s3_access_key
-      RegistryS3SecretKey = var.registry_s3_secret_key
-      RegistryHtpasswd    = var.registry_htpasswd
-    })
-    "11-cilium-deny-metadata.yaml" = file("${path.module}/manifests/11-cilium-deny-metadata.yaml")
-    "12-kubearmor.yaml" = templatefile("${path.module}/manifests/12-kubearmor.yaml", {
-      KubearmorVersion = var.kubearmor_version
+
+    # Security
+    "200-kubearmor.yaml" = templatefile("${path.module}/manifests/02-security/200-kubearmor.yaml", {
+      KubearmorVersion = var.kubearmor_version,
       LogsBucket       = var.logs_s3_bucket
     })
-    "13-fluent-bit.yaml" = templatefile("${path.module}/manifests/13-fluent-bit.yaml", {
+    "201-kyverno.yaml" = templatefile("${path.module}/manifests/02-security/201-kyverno.yaml", {
+      KyvernoVersion = var.kyverno_version
+    })
+    "210-policy-enforce-gvisor.yaml"        = file("${path.module}/manifests/02-security/210-policy-enforce-gvisor.yaml")
+    "211-policy-default-deny-tenants.yaml"  = file("${path.module}/manifests/02-security/211-policy-default-deny-tenants.yaml")
+    "212-policy-deny-metadata-access.yaml"  = file("${path.module}/manifests/02-security/212-policy-deny-metadata-access.yaml")
+    "213-policy-deny-internode-access.yaml" = file("${path.module}/manifests/02-security/213-policy-deny-internode-access.yaml")
+    "214-policy-generate-quotas.yaml"       = file("${path.module}/manifests/02-security/214-policy-generate-quotas.yaml")
+
+    # Middleware
+    "300-nats.yaml" = templatefile("${path.module}/manifests/03-middleware/300-nats.yaml", {
+      NatsVersion = var.nats_version
+    })
+    "320-knative-serving.yaml" = templatefile("${path.module}/manifests/03-middleware/320-knative-serving.yaml", {
+      KnativeVersion = var.knative_version
+    })
+    "321-kourier.yaml" = templatefile("${path.module}/manifests/03-middleware/321-kourier.yaml", {
+      KnativeVersion = var.knative_version
+    })
+    "322-knative-eventing.yaml" = templatefile("${path.module}/manifests/03-middleware/322-knative-eventing.yaml", {
+      KnativeVersion = var.knative_version
+    })
+    "323-knative-nats.yaml" = templatefile("${path.module}/manifests/03-middleware/323-knative-nats.yaml", {
+      KnativeVersion = var.knative_version
+    })
+
+    # Observability
+    "400-fluent-bit-secret.yaml" = templatefile("${path.module}/manifests/04-observability/400-fluent-bit-secret.yaml", {
+      LogsBucket    = var.logs_s3_bucket
+      LogsAccessKey = var.logs_s3_access_key
+      LogsSecretKey = var.logs_s3_secret_key
+    })
+    "401-fluent-bit.yaml" = templatefile("${path.module}/manifests/04-observability/401-fluent-bit.yaml", {
       FluentBitVersion = var.fluent_bit_version
       LogsBucket       = var.logs_s3_bucket
       LogsAccessKey    = var.logs_s3_access_key
       LogsSecretKey    = var.logs_s3_secret_key
     })
-    "14-victoria-metrics.yaml" = templatefile("${path.module}/manifests/14-victoria-metrics.yaml", { VictoriaMetricsVersion = var.victoria_metrics_version })
-    "15-loki.yaml"             = templatefile("${path.module}/manifests/15-loki.yaml", { LokiVersion = var.loki_version })
-    "16-grafana.yaml"          = templatefile("${path.module}/manifests/16-grafana.yaml", { GrafanaVersion = var.grafana_version })
+    "402-victoria-metrics.yaml" = templatefile("${path.module}/manifests/04-observability/402-victoria-metrics.yaml", {
+      VictoriaMetricsVersion = var.victoria_metrics_version
+    })
+    "403-loki.yaml" = templatefile("${path.module}/manifests/04-observability/403-loki.yaml", {
+      LokiVersion = var.loki_version
+    })
+    "404-grafana.yaml" = templatefile("${path.module}/manifests/04-observability/404-grafana.yaml", {
+      GrafanaVersion = var.grafana_version
+    })
+
+    # Apps
+    "500-registry.yaml" = templatefile("${path.module}/manifests/05-apps/500-registry.yaml", {
+      RegistryS3Bucket    = var.registry_s3_bucket
+      RegistryS3AccessKey = var.registry_s3_access_key
+      RegistryS3SecretKey = var.registry_s3_secret_key
+      RegistryHtpasswd    = var.registry_htpasswd
+      CloudEnv            = var.cloud_env
+      RegistryHost        = "registry.${var.cloud_env}.${var.project_name}.com"
+    })
+    "501-argocd.yaml" = templatefile("${path.module}/manifests/05-apps/501-argocd.yaml", {
+      ArgoVersion = var.argocd_version
+      CloudEnv    = var.cloud_env
+      ArgoHost    = "argocd.${var.cloud_env}.${var.project_name}.com"
+    })
   }
 
   manifest_injector_script = join("\n", [
@@ -216,8 +297,10 @@ resource "hcloud_server" "node" {
   location    = var.location
   ssh_keys    = var.ssh_key_ids
 
+  # This allows the node to reach the internet without a NAT gateway.
+  # The Cloud Firewall (defined in main.tf) will protect it.
   public_net {
-    ipv4_enabled = false
+    ipv4_enabled = true
     ipv6_enabled = false
   }
 
@@ -243,7 +326,6 @@ resource "hcloud_server" "node" {
       etcd_s3_secret_key        = var.etcd_s3_secret_key
       etcd_s3_bucket            = var.etcd_s3_bucket
       tailscale_auth_server_key = var.tailscale_auth_server_key
-      network_gateway           = var.network_gateway
       manifest_injector_script  = local.manifest_injector_script
     }) :
     templatefile("${path.module}/templates/cloud-init-agent.yaml", {
@@ -252,7 +334,6 @@ resource "hcloud_server" "node" {
       k3s_url                  = "${var.load_balancer_ip}:6443"
       k3s_token                = var.k3s_token
       tailscale_auth_agent_key = var.tailscale_auth_agent_key
-      network_gateway          = var.network_gateway
     })
   )
 }

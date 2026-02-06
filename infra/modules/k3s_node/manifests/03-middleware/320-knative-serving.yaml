@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: knative-serving
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: knative-serving
+  namespace: kube-system
+spec:
+  chart: serving
+  repo: https://knative-sandbox.github.io/knative-on-helm
+  targetNamespace: knative-serving
+  createNamespace: true
+  version: "${KnativeVersion}" # e.g., 1.14.0
+  bootstrap: true

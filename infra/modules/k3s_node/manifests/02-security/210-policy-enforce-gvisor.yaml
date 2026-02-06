@@ -1,0 +1,26 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: enforce-gvisor
+  annotations:
+    policies.kyverno.io/title: Enforce gVisor Runtime
+    policies.kyverno.io/description: >-
+      Ensures that all pods in the project-platform namespace
+      are running inside the secure gVisor sandbox.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-gvisor-runtime-class
+      match:
+        any:
+          - resources:
+              namespaces:
+                - project-platform
+              kinds:
+                - Pod
+      validate:
+        message: "This namespace requires the 'gvisor' runtime class for security."
+        pattern:
+          spec:
+            runtimeClassName: gvisor

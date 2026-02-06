@@ -27,7 +27,8 @@ vars:
 
   # Helm is just a CLI tool used during build/deploy.
   # - Runtime RAM: 0MB (It does not run as a service on the cluster)
-  HELM_VERSION: "v3.14.2"
+  # HELM_VERSION: "v3.14.2" # We are not using Helm since we are using K3s for our cluster management. K3s handles Helm charts internally.
+  GVISOR_VERSION: "20240220" # ~10MB (Hardened container runtime)
 
   # Core Networking & Storage
   HCLOUD_CCM_VERSION: "1.29.1" # ~50MB (Connects K3s to Hetzner API)
@@ -40,10 +41,13 @@ vars:
   # 🚀 THE "SKINNY BOY" STACK (Security & Observability)
   # Total Additional RAM: ~800MB (vs ~2.5GB for the "Chunky" stack)
   KUBEARMOR_VERSION: "1.3.1" # ~100MB (Enforcement vs Falco's 800MB)
+  KYVERNO_VERSION: "3.2.6" # ~100MB (Policy Engine)
   FLUENT_BIT_VERSION: "0.44.0" # ~80MB  (Log Shipping agent)
   VM_VERSION: "0.14.0" # ~250MB (VictoriaMetrics: Metrics DB)
   LOKI_VERSION: "5.43.3" # ~300MB (Loki: Log DB)
   GRAFANA_VERSION: "7.3.0" # ~80MB  (Visual Dashboard)
+  ARGOCD_VERSION: "6.7.11" # ~500MB (GitOps CD)
+  KNATIVE_VERSION: "1.14.0" # ~800MB (Serverless + Eventing)
 
   # TERRAFORM WRAPPERS
   TF_CMD: >-
@@ -68,11 +72,14 @@ vars:
     -var="cert_manager_version={{.CERT_MANAGER_VERSION}}"
     -var="nats_version={{.NATS_VERSION}}"
     -var="kubearmor_version={{.KUBEARMOR_VERSION}}"
+    -var="kyverno_version={{.KYVERNO_VERSION}}"
     -var="fluent_bit_version={{.FLUENT_BIT_VERSION}}"
     -var="registry_htpasswd={{.REGISTRY_HTPASSWD}}"
     -var="vm_version={{.VM_VERSION}}"
     -var="loki_version={{.LOKI_VERSION}}"
     -var="grafana_version={{.GRAFANA_VERSION}}"
+    -var="argocd_version={{.ARGOCD_VERSION}}"
+    -var="knative_version={{.KNATIVE_VERSION}}"
 
 tasks:
   _tf_init:
@@ -93,6 +100,7 @@ tasks:
         -var "k3s_server_type={{.K3S_SERVER_TYPE}}"
         -var "k3s_version={{.K3S_VERSION}}"
         -var "helm_version={{.HELM_VERSION}}"
+        -var "gvisor_version={{.GVISOR_VERSION}}"
         -var "image={{.IMAGE}}"
         {{.PACKER_DIR}}/ubuntu.pkr.hcl
 

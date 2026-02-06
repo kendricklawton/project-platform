@@ -1,0 +1,69 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-default-quotas
+  annotations:
+    policies.kyverno.io/title: Generate Default Quotas
+    policies.kyverno.io/description: >-
+      Automatically creates a ResourceQuota and LimitRange for any new
+      namespace to prevent tenants from consuming infinite resources.
+spec:
+  rules:
+    - name: generate-resource-quota
+      match:
+        any:
+          - resources:
+              kinds:
+                - Namespace
+      # Exclude system namespaces so we don't break K3s
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - local-path-storage
+      generate:
+        synchronize: true # If you change this policy later, update existing namespaces too
+        kind: ResourceQuota
+        name: default-quota
+        namespace: "{{request.object.metadata.name}}"
+        data:
+          spec:
+            hard:
+              requests.cpu: "4" # Max 4 Cores reserved per namespace
+              requests.memory: "8Gi" # Max 8GB RAM reserved per namespace
+              limits.cpu: "8" # Max 8 Cores bursting
+              limits.memory: "16Gi" # Max 16GB RAM bursting
+              pods: "20" # Max 20 Pods
+              count/services.loadbalancer: "0" # Block expensive LoadBalancers by default
+
+    - name: generate-limit-range
+      match:
+        any:
+          - resources:
+              kinds:
+                - Namespace
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+      generate:
+        synchronize: true
+        kind: LimitRange
+        name: default-limits
+        namespace: "{{request.object.metadata.name}}"
+        data:
+          spec:
+            limits:
+              - default: # The "Max" if not specified
+                  memory: 512Mi
+                  cpu: 500m
+                defaultRequest: # The "Guaranteed" if not specified
+                  memory: 128Mi
+                  cpu: 100m
+                type: Container

@@ -1,7 +1,7 @@
-apiVersion: "cilium.io/v2"
+apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
-  name: "deny-metadata-access"
+  name: "policy-deny-metadata-access"
 spec:
   description: "Block access to Hetzner Metadata Service for all non-system pods"
   # Apply to all pods NOT in kube-system

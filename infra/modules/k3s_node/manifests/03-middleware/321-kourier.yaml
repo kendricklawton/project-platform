@@ -1,0 +1,23 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: kourier
+  namespace: kube-system
+spec:
+  chart: kourier
+  repo: https://knative-sandbox.github.io/knative-on-helm
+  targetNamespace: knative-serving
+  version: "${KnativeVersion}"
+  bootstrap: true
+  valuesContent: |-
+    service:
+      type: ClusterIP # We use Nginx Ingress to route to Kourier
+---
+# Configure Knative to use Kourier
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-network
+  namespace: knative-serving
+data:
+  ingress-class: "kourier.ingress.networking.knative.dev"

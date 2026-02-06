@@ -19,7 +19,7 @@ terraform {
 
 # --- VARIABLES ---
 variable "hcloud_token" { sensitive = true }
-variable "tailscale_auth_nat_key" { sensitive = true }
+# REMOVED: tailscale_auth_nat_key
 variable "tailscale_auth_k3s_server_key" { sensitive = true }
 variable "tailscale_auth_k3s_agent_key" { sensitive = true }
 variable "etcd_s3_access_key" { sensitive = true }
@@ -47,10 +47,13 @@ variable "ingress_nginx_version" { type = string }
 variable "cert_manager_version" { type = string }
 variable "nats_version" { type = string }
 variable "kubearmor_version" { type = string }
+variable "kyverno_version" { type = string }
 variable "fluent_bit_version" { type = string }
 variable "victoria_metrics_version" { type = string }
 variable "loki_version" { type = string }
 variable "grafana_version" { type = string }
+variable "argocd_version" { type = string }
+variable "knative_version" { type = string }
 
 # Default Values
 variable "api_load_balancer_ip" {
@@ -58,10 +61,7 @@ variable "api_load_balancer_ip" {
   default     = "10.0.1.254"
 }
 
-variable "nat_hcloud_server_network_ip" {
-  description = "Static internal IP for the NAT Server Network Node"
-  default     = "10.0.1.2"
-}
+# REMOVED: nat_hcloud_server_network_ip
 
 provider "hcloud" {
   token = var.hcloud_token
@@ -76,40 +76,31 @@ locals {
   }
   network_zone = local.location_zone_map[var.hcloud_location]
 
-  # Server types to match Packer builds (cpx21 for k3s, cpx11 for nat)
+  # Server types to match Packer builds
   config = {
     dev = {
       master_count = 1,
       worker_count = 1,
-      nat_type     = "cpx11",
-      master_type  = "cpx21",
-      worker_type  = "cpx21"
+      # REMOVED: nat_type
+      master_type = "cpx21",
+      worker_type = "cpx21"
     }
     prod = {
       master_count = 3,
       worker_count = 3,
-      nat_type     = "cpx11",
-      master_type  = "cpx21",
-      worker_type  = "cpx21"
+      # REMOVED: nat_type
+      master_type = "cpx21",
+      worker_type = "cpx21"
     }
   }
   env = local.config[var.cloud_env]
 
-  nat_user_data = templatefile("${path.module}/cloud-init-nat.yaml", {
-    tailscale_auth_nat_key = var.tailscale_auth_nat_key
-    hostname               = "${local.prefix}-nat-${var.hcloud_location}"
-  })
+  # REMOVED: nat_user_data
 }
 
 # Retrieve K3s Base Image (Role=k3s-base)
 data "hcloud_image" "k3s_base" {
   with_selector = "role=k3s-base,region=${var.hcloud_location}"
-  most_recent   = true
-}
-
-# Retrieve NAT Base Image (Role=nat-base)
-data "hcloud_image" "nat_base" {
-  with_selector = "role=nat-base,region=${var.hcloud_location}"
   most_recent   = true
 }
 
@@ -127,40 +118,6 @@ resource "hcloud_network_subnet" "k3s_nodes" {
   type         = "cloud"
   network_zone = local.network_zone
   ip_range     = "10.0.1.0/24"
-}
-
-resource "hcloud_server" "nat" {
-  name        = "${local.prefix}-nat-${var.hcloud_location}"
-  image       = data.hcloud_image.nat_base.id
-  server_type = local.env.nat_type
-  location    = var.hcloud_location
-  ssh_keys    = [data.hcloud_ssh_key.admin.id]
-  labels      = { role = "nat" }
-
-  public_net {
-    ipv4_enabled = true
-    ipv6_enabled = false
-  }
-
-  network {
-    network_id = hcloud_network.main.id
-    ip         = var.nat_hcloud_server_network_ip
-  }
-
-  user_data  = local.nat_user_data
-  depends_on = [hcloud_network_subnet.k3s_nodes]
-}
-
-resource "time_sleep" "wait_for_nat_config" {
-  depends_on      = [hcloud_server.nat]
-  create_duration = "120s"
-}
-
-resource "hcloud_network_route" "default_route" {
-  network_id  = hcloud_network.main.id
-  destination = "0.0.0.0/0"
-  gateway     = var.nat_hcloud_server_network_ip
-  depends_on  = [hcloud_server.nat]
 }
 
 resource "hcloud_load_balancer" "api" {
@@ -279,8 +236,12 @@ module "control_plane_init" {
   cert_manager_version      = var.cert_manager_version
   nats_version              = var.nats_version
   kubearmor_version         = var.kubearmor_version
+  kyverno_version           = var.kyverno_version
   fluent_bit_version        = var.fluent_bit_version
-  depends_on                = [hcloud_network_route.default_route, time_sleep.wait_for_nat_config]
+  argocd_version            = var.argocd_version
+  knative_version           = var.knative_version
+  # REMOVED: depends_on = [hcloud_network_route.default_route, time_sleep.wait_for_nat_config]
+  # No dependencies on NAT anymore
 }
 
 resource "hcloud_load_balancer_target" "api_target_init" {
@@ -335,7 +296,10 @@ module "control_plane_join" {
   cert_manager_version      = var.cert_manager_version
   nats_version              = var.nats_version
   kubearmor_version         = var.kubearmor_version
+  kyverno_version           = var.kyverno_version
   fluent_bit_version        = var.fluent_bit_version
+  argocd_version            = var.argocd_version
+  knative_version           = var.knative_version
   depends_on                = [time_sleep.wait_for_init_node]
 }
 
@@ -376,65 +340,20 @@ resource "hcloud_load_balancer_target" "ingress_targets" {
   use_private_ip   = true
 }
 
-resource "hcloud_firewall" "cluster_fw" {
-  name = "${local.prefix}-fw-${var.hcloud_location}"
+# --- THE HARD SHELL FIREWALL ---
+resource "hcloud_firewall" "k3s_hard_shell" {
+  name = "${local.prefix}-hard-shell-fw"
 
+  # 1. ALLOW: Inbound from Load Balancer (API Health Checks)
   rule {
     direction  = "in"
     protocol   = "tcp"
     port       = "6443"
-    source_ips = ["10.0.0.0/16"]
+    source_ips = [var.api_load_balancer_ip]
   }
 
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "10250"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "8472"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "4240"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "8473"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "2379-2380"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "80"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "443"
-    source_ips = ["10.0.0.0/16"]
-  }
-
+  # 2. ALLOW: WireGuard (Tailscale Mesh VPN)
+  # This is the ONLY way you can SSH into the box.
   rule {
     direction  = "in"
     protocol   = "udp"
@@ -442,12 +361,24 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["0.0.0.0/0", "::/0"]
   }
 
+  # 3. ALLOW: Internal Cluster Traffic (The "Private Network" still exists)
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "any"
+    source_ips = ["10.0.0.0/16"]
+  }
+
   rule {
     direction  = "in"
     protocol   = "udp"
-    port       = "51820"
-    source_ips = ["0.0.0.0/0", "::/0"]
+    port       = "any"
+    source_ips = ["10.0.0.0/16"]
   }
+
+  # BLOCK: EVERYTHING ELSE
+  # No SSH (22). No HTTP (80). No HTTPS (443).
+  # The Load Balancer hits the nodes on the Private IP (10.0.x.x), not the Public IP.
 
   apply_to { label_selector = "cluster=${local.prefix}" }
 }
