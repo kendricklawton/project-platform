@@ -251,6 +251,35 @@ tasks:
           CMD: "output"
           ARGS: ""
 
+  # BUILD WORKFLOWS (Choice of ko or Docker)
+  build:ko:api:
+    desc: "Build the API container image using ko (Go-optimized)"
+    dir: core
+    env:
+      KO_DOCKER_REPO: '{{.KO_DOCKER_REPO | default "ko.local"}}'
+    cmds:
+      - ko build ./cmd/platform-api --bare
+
+  build:ko:cli:
+    desc: "Build the CLI container image using ko (Go-optimized)"
+    dir: core
+    env:
+      KO_DOCKER_REPO: '{{.KO_DOCKER_REPO | default "ko.local"}}'
+    cmds:
+      - ko build ./cmd/platform-cli --bare
+
+  build:docker:api:
+    desc: "Build the API container image using Docker"
+    dir: core
+    cmds:
+      - docker build -t project-platform-api:latest --build-arg SERVICE_NAME=platform-api .
+
+  build:docker:cli:
+    desc: "Build the CLI container image using Docker"
+    dir: core
+    cmds:
+      - docker build -t project-platform-cli:latest --build-arg SERVICE_NAME=platform-cli .
+
   # WEB APP WORKFLOWS
   web:dev:
     desc: "Show Web App"
