@@ -30,7 +30,7 @@ func main() {
 	}
 	log.Println("✅ Connected to Kubernetes")
 
-	handler := api.NewHandler(k8sClient, store)
+	handler := api.NewHandler(k8sClient, store, cfg.WorkOSAPIKey, cfg.WorkOSClientID)
 
 	log.Printf("🚀 Starting API server on port %d...", cfg.Port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), handler.Routes()); err != nil {

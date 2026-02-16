@@ -6,13 +6,17 @@ import (
 )
 
 type Handler struct {
-	K8s   *k8s.Client
-	Store *db.Store // Renamed from DB to Store
+	K8s            *k8s.Client
+	Store          *db.Store
+	WorkOSAPIKey   string
+	WorkOSClientID string
 }
 
-func NewHandler(k8s *k8s.Client, store *db.Store) *Handler {
+func NewHandler(k8s *k8s.Client, store *db.Store, workosAPIKey, workosClientID string) *Handler {
 	return &Handler{
-		K8s:   k8s,
-		Store: store,
+		K8s:            k8s,
+		Store:          store,
+		WorkOSAPIKey:   workosAPIKey,
+		WorkOSClientID: workosClientID,
 	}
 }

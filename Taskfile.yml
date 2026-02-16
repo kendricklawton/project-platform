@@ -42,7 +42,7 @@ vars:
   KNATIVE_VERSION: "1.14.0"
 
   # Database Defaults
-  DB_URL: "{{.DB_URL}}"
+  DATABASE_URL: "{{.DATABASE_URL}}"
 
 tasks:
   # PACKER WORKFLOWS
@@ -153,12 +153,6 @@ tasks:
       - terraform init -reconfigure -backend-config="bucket={{.TFSTATE_BUCKET}}" -backend-config="prefix={{.PROVIDER}}"
       - terraform {{.CMD}} {{.ARGS}}
 
-  lint:
-    desc: "Validate and format all Terraform code"
-    cmds:
-      - task: tf:validate
-      - task: tf:fmt
-
   # HETZNER INFRASTRUCTURE
   hz:plan:
     desc: "Plan Hetzner Ashburn (Dev)"
@@ -257,7 +251,7 @@ tasks:
           CMD: "output"
           ARGS: ""
 
-  # APP WORKFLOWS
+  # WEB APP WORKFLOWS
   web:dev:
     desc: "Show Web App"
     dir: web
@@ -277,27 +271,27 @@ tasks:
 
   db:migrate:
     desc: "Run database migrations (up)"
+    silent: true
     cmds:
       - go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-      - migrate -path db/migrations -database "{{.DB_URL}}" up
+      - migrate -path database/migrations -database "{{.DATABASE_URL}}" up
 
   db:migrate-down:
     desc: "Rollback the last database migration (down 1)"
     cmds:
-      - migrate -path db/migrations -database "{{.DB_URL}}" down 1
+      - migrate -path database/migrations -database "{{.DATABASE_URL}}" down 1
 
   db:create-migration:
     desc: "Create a new migration (usage: task db:create-migration NAME=create_users)"
     cmds:
-      - migrate create -ext sql -dir db/migrations -seq {{.NAME}}
+      - migrate create -ext sql -dir database/migrations -seq {{.NAME}}
     requires:
       vars: [NAME]
 
   db:generate:
     desc: "Generate Go code from SQL using sqlc"
-    dir: db
+    dir: database
     cmds:
-      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
       - sqlc generate
 
   db:setup:
@@ -308,3 +302,8 @@ tasks:
       - sleep 5
       - task: db:migrate
       - task: db:generate
+
+  db:login:
+    desc: "Login to the local PostgreSQL database"
+    cmds:
+      - docker exec -it project-platform-db-1 psql -U platform platform_db

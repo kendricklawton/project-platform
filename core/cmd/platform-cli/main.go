@@ -1,8 +1,10 @@
 package main
 
-import "github.com/kendricklawton/project-platform/core/internal/cli"
+import (
+	"github.com/kendricklawton/project-platform/core/internal/cli"
+	_ "github.com/kendricklawton/project-platform/core/internal/cli/cmds"
+)
 
 func main() {
-	// This calls the Execute() function sitting inside your root.go file
 	cli.Execute()
 }

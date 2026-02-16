@@ -14,8 +14,12 @@ type Config struct {
 	Debug bool `envconfig:"DEBUG" default:"false"`
 
 	// Database (Postgres) - Required
-	// If DB_URL is missing, the app will crash with a helpful error.
+	// If DATABASE_URL is missing, the app will crash with a helpful error.
 	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
+
+	// WorkOS Settings
+	WorkOSAPIKey   string `envconfig:"WORKOS_API_KEY" required:"true"`
+	WorkOSClientID string `envconfig:"WORKOS_CLIENT_ID" required:"true"`
 
 	// Kubernetes (In-Cluster or Kubeconfig path)
 	KubeConfigPath string `envconfig:"KUBECONFIG"`
