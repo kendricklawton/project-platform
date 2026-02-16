@@ -42,8 +42,7 @@ vars:
   KNATIVE_VERSION: "1.14.0"
 
   # Database Defaults
-  DB_URL: "{{.DB_URL | default 'postgres://postgres:postgres@localhost:5432/project_platform?sslmode=disable'}}"
-  Knative_VERSION: "1.14.0"
+  DB_URL: "{{.DB_URL}}"
 
 tasks:
   # PACKER WORKFLOWS

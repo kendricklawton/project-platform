@@ -1,6 +1,4 @@
--- ==========================================
 -- USERS
--- ==========================================
 
 -- name: CreateUser :one
 INSERT INTO users (
@@ -18,10 +16,7 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM users
 WHERE email = $1 LIMIT 1;
 
--- ==========================================
 -- PROJECTS & RBAC
--- ==========================================
-
 -- name: CreateProject :one
 INSERT INTO projects (
     id, name, region
@@ -55,9 +50,7 @@ ORDER BY p.id DESC;
 SELECT role FROM project_members
 WHERE project_id = $1 AND user_id = $2 LIMIT 1;
 
--- ==========================================
 -- DEPLOYMENTS
--- ==========================================
 
 -- name: CreateDeployment :one
 INSERT INTO deployments (
@@ -91,9 +84,7 @@ WHERE status = 'queued'
 ORDER BY id ASC
 LIMIT 1;
 
--- ==========================================
 -- USAGE (BILLING)
--- ==========================================
 
 -- name: IncrementProjectUsage :one
 -- "Upsert" logic: If the month record exists, add to it. If not, create it.
