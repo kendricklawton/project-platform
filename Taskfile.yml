@@ -1,215 +1,311 @@
-#  INFRASTRUCTURE TASKFILE
 version: "3"
 
 dotenv: [".env"]
 
 vars:
-  #  GLOBAL CONFIGURATION
-  TF_DIR: "infra"
-  PACKER_DIR: "packer"
-  CLOUD_ENV: '{{.CLOUD_ENV | default "dev"}}'
-  KEY_NAME: "{{.KEY_NAME}}"
-  KUBECONFIG_PATH: "kube/config"
-  HCLOUD_LOCATION: '{{.HCLOUD_LOCATION | default "ash"}}'
-  LETSENCRYPT_EMAIL: "{{.LETSENCRYPT_EMAIL}}"
+  PROJECT_NAME: "project-platform"
+  ADMIN_IP: "{{.ADMIN_IP}}"
 
-  #  BUILD STRATEGY (Hetzner)
-  K3S_SERVER_TYPE: "cpx21"
-  NAT_SERVER_TYPE: "cpx11"
-  IMAGE: "{{.IMAGE}}"
+  # PACKER CONFIG
+  PACKER_DIR: "infra/packer"
 
-  # VERSION PINNING & MEMORY BUDGET
-  # Base Infrastructure
-  # K3s combines API/Etcd/Controller into one binary.
-  # - Server Node: ~800MB - 1GB (Depending on load)
-  # - Agent Node:  ~300MB - 400MB (Idle)
+  # DigitalOcean
+  DOCLOUD_IMAGE: "ubuntu-22-04-x64"
+  DOCLOUD_K3S_DROPLET_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_TOKEN: "{{.DOCLOUD_TOKEN}}"
+
+  # Hetzner
+  HCLOUD_IMAGE: "ubuntu-22.04"
+  HCLOUD_K3S_SERVER_TYPE: "cpx31"
+  HCLOUD_LB_TYPE: "lb11"
+  HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
+
+  # COMPONENT VERSIONS
   K3S_VERSION: "v1.29.1+k3s2"
+  GVISOR_VERSION: "latest"
+  HETZNER_CCM_VERSION: "1.29.1"
+  HETZNER_CSI_VERSION: "2.6.0"
+  DIGITALOCEAN_CCM_VERSION: "0.1.58"
+  DIGITALOCEAN_CSI_VERSION: "4.8.0"
+  CILIUM_VERSION: "1.15.1"
+  CNPG_VERSION: "1.28.1"
+  INGRESS_NGINX_VERSION: "4.10.0"
+  CERT_MANAGER_VERSION: "v1.14.0"
+  NATS_VERSION: "2.10.12"
+  KUBEARMOR_VERSION: "1.3.1"
+  KYVERNO_VERSION: "3.2.6"
+  FLUENT_BIT_VERSION: "3.0.0"
+  VM_VERSION: "0.14.0"
+  LOKI_VERSION: "5.43.3"
+  GRAFANA_VERSION: "7.3.0"
+  ARGOCD_VERSION: "6.7.11"
+  KNATIVE_VERSION: "1.14.0"
 
-  # Helm is just a CLI tool used during build/deploy.
-  # - Runtime RAM: 0MB (It does not run as a service on the cluster)
-  # HELM_VERSION: "v3.14.2" # We are not using Helm since we are using K3s for our cluster management. K3s handles Helm charts internally.
-  GVISOR_VERSION: "20240220" # ~10MB (Hardened container runtime)
-
-  # Core Networking & Storage
-  HCLOUD_CCM_VERSION: "1.29.1" # ~50MB (Connects K3s to Hetzner API)
-  HCLOUD_CSI_VERSION: "2.6.0" # ~50MB (Mounts Volumes)
-  CILIUM_VERSION: "1.15.1" # ~300MB (Critical: eBPF Firewall/Networking)
-  INGRESS_NGINX_VERSION: "4.10.0" # ~200MB (The entry door for all traffic)
-  CERT_MANAGER_VERSION: "v1.14.0" # ~120MB (Auto-renews SSL Certs)
-  NATS_VERSION: "1.2.4" # ~150MB (Messaging/Queue for Platform)
-
-  # 🚀 THE "SKINNY BOY" STACK (Security & Observability)
-  # Total Additional RAM: ~800MB (vs ~2.5GB for the "Chunky" stack)
-  KUBEARMOR_VERSION: "1.3.1" # ~100MB (Enforcement vs Falco's 800MB)
-  KYVERNO_VERSION: "3.2.6" # ~100MB (Policy Engine)
-  FLUENT_BIT_VERSION: "0.44.0" # ~80MB  (Log Shipping agent)
-  VM_VERSION: "0.14.0" # ~250MB (VictoriaMetrics: Metrics DB)
-  LOKI_VERSION: "5.43.3" # ~300MB (Loki: Log DB)
-  GRAFANA_VERSION: "7.3.0" # ~80MB  (Visual Dashboard)
-  ARGOCD_VERSION: "6.7.11" # ~500MB (GitOps CD)
-  KNATIVE_VERSION: "1.14.0" # ~800MB (Serverless + Eventing)
-
-  # TERRAFORM WRAPPERS
-  TF_CMD: >-
-    export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/keys/{{.KEY_NAME}}-{{.CLOUD_ENV}}.json" &&
-    terraform -chdir={{.TF_DIR}}
-
-  TF_VARS: >-
-    -var="cloud_env={{.CLOUD_ENV}}"
-    -var="hcloud_location={{.HCLOUD_LOCATION}}"
-    -var="gcp_project_id={{.GCP_PROJECT_ID}}"
-    -var="project_name={{.PROJECT_NAME}}"
-    -var="hcloud_token={{.HCLOUD_TOKEN}}"
-    -var="ssh_key_name={{.SSH_KEY_NAME}}"
-    -var="tailscale_auth_nat_key={{.TAILSCALE_AUTH_NAT_KEY}}"
-    -var="tailscale_auth_k3s_server_key={{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
-    -var="tailscale_auth_k3s_agent_key={{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
-    -var="letsencrypt_email={{.LETSENCRYPT_EMAIL}}"
-    -var="hcloud_ccm_version={{.HCLOUD_CCM_VERSION}}"
-    -var="hcloud_csi_version={{.HCLOUD_CSI_VERSION}}"
-    -var="cilium_version={{.CILIUM_VERSION}}"
-    -var="ingress_nginx_version={{.INGRESS_NGINX_VERSION}}"
-    -var="cert_manager_version={{.CERT_MANAGER_VERSION}}"
-    -var="nats_version={{.NATS_VERSION}}"
-    -var="kubearmor_version={{.KUBEARMOR_VERSION}}"
-    -var="kyverno_version={{.KYVERNO_VERSION}}"
-    -var="fluent_bit_version={{.FLUENT_BIT_VERSION}}"
-    -var="registry_htpasswd={{.REGISTRY_HTPASSWD}}"
-    -var="vm_version={{.VM_VERSION}}"
-    -var="loki_version={{.LOKI_VERSION}}"
-    -var="grafana_version={{.GRAFANA_VERSION}}"
-    -var="argocd_version={{.ARGOCD_VERSION}}"
-    -var="knative_version={{.KNATIVE_VERSION}}"
+  # Database Defaults
+  DB_URL: "{{.DB_URL | default 'postgres://postgres:postgres@localhost:5432/project_platform?sslmode=disable'}}"
+  Knative_VERSION: "1.14.0"
 
 tasks:
-  _tf_init:
+  # PACKER WORKFLOWS
+  _packer_build:
     internal: true
-    desc: "Helper: Initialize Terraform Backend"
-    cmds:
-      - echo "🔧 Initializing {{.CLOUD_ENV}} state..."
-      - "{{.TF_CMD}} init -reconfigure -backend-config='bucket={{.PROJECT_NAME}}-tf-state-{{.CLOUD_ENV}}'"
-
-  packer:build:
-    desc: "Build Golden Image (Ubuntu + K3s + Helm)"
+    silent: true
+    desc: "Generic Packer Build Wrapper"
+    env:
+      PKR_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
+      PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
     cmds:
       - packer init {{.PACKER_DIR}}
       - >-
-        packer build
-        -var "hcloud_token={{.HCLOUD_TOKEN}}"
-        -var "nat_server_type={{.NAT_SERVER_TYPE}}"
-        -var "k3s_server_type={{.K3S_SERVER_TYPE}}"
+        packer build {{.BUILD_ARGS}}
+        -var "hcloud_image={{.HCLOUD_IMAGE}}"
+        -var "hcloud_k3s_server_type={{.HCLOUD_K3S_SERVER_TYPE}}"
+        -var "docloud_image={{.DOCLOUD_IMAGE}}"
+        -var "docloud_k3s_droplet_type={{.DOCLOUD_K3S_DROPLET_TYPE}}"
         -var "k3s_version={{.K3S_VERSION}}"
-        -var "helm_version={{.HELM_VERSION}}"
         -var "gvisor_version={{.GVISOR_VERSION}}"
-        -var "image={{.IMAGE}}"
         {{.PACKER_DIR}}/ubuntu.pkr.hcl
 
-  infra:plan:
-    desc: "Terraform Plan"
-    deps: [_tf_init]
+  packer:hz:
+    desc: "Build Hetzner Images Only"
     cmds:
-      - |
-        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
-        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
-        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
-        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
-        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
-        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
-        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
+      - task: _packer_build
+        vars: { BUILD_ARGS: "-only=*.hcloud.*" }
 
-        {{.TF_CMD}} plan {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
-          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
-          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
-          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
-          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
-          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
-          -var="logs_s3_bucket=${LOGS_BUCKET}" \
-          -var="logs_s3_access_key=${LOGS_ACCESS}" \
-          -var="logs_s3_secret_key=${LOGS_SECRET}"
-
-  infra:apply:
-    desc: "Terraform Apply"
-    prompt: "⚠️  Applying to {{.CLOUD_ENV}} ({{.HCLOUD_LOCATION}}). Proceed?"
-    deps: [_tf_init]
+  packer:do:
+    desc: "Build DigitalOcean Images Only"
     cmds:
-      - |
-        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
-        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
-        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
-        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
-        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
-        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
-        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
+      - task: _packer_build
+        vars: { BUILD_ARGS: "-only=*.digitalocean.*" }
 
-        {{.TF_CMD}} apply -auto-approve {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
-          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
-          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
-          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
-          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
-          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
-          -var="logs_s3_bucket=${LOGS_BUCKET}" \
-          -var="logs_s3_access_key=${LOGS_ACCESS}" \
-          -var="logs_s3_secret_key=${LOGS_SECRET}"
+  packer:all:
+    desc: "Build Both Hetzner and DigitalOcean Images"
+    cmds:
+      - task: _packer_build
+        vars: { BUILD_ARGS: "" }
 
-  infra:kubeconfig:
-    desc: "Fetch Kubeconfig via Tailscale"
+  # TERRAFORM CORE ENGINE
+  _tf:
+    internal: true
+    dir: infra/terraform/providers/{{.PROVIDER}}
     vars:
-      DNS_NAME: "{{.CLOUD_ENV}}-{{.PROJECT_NAME}}-server-01"
-      SSH_TARGET: "{{.DNS_NAME}}"
+      TFSTATE_BUCKET: "{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}"
+      CCM_VERSION: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_CCM_VERSION}}{{else}}{{.DIGITALOCEAN_CCM_VERSION}}{{end}}'
+      CSI_VERSION: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_CSI_VERSION}}{{else}}{{.DIGITALOCEAN_CSI_VERSION}}{{end}}'
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: "{{.TASKFILE_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}.json"
+      DIGITALOCEAN_TOKEN: "{{.DOCLOUD_TOKEN}}"
+      HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
+
+      # TF_VAR Data
+      # TF_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
+      # TF_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
+      TF_VAR_admin_ip: "{{.ADMIN_IP}}"
+      TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
+      TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
+      TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
+      TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}""{{end}}'
+      TF_VAR_location: "{{.LOCATION}}"
+      TF_VAR_project_name: "{{.PROJECT_NAME}}"
+      TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
+      TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
+      TF_VAR_letsencrypt_email: "{{.LETSENCRYPT_EMAIL}}"
+      TF_VAR_tailscale_auth_k3s_server_key: "{{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
+      TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
+      TF_VAR_etcd_s3_bucket: "{{.PROJECT_NAME}}-etcd-{{.CLOUD_ENV}}"
+      TF_VAR_registry_s3_bucket: "{{.PROJECT_NAME}}-registry-{{.CLOUD_ENV}}"
+      TF_VAR_database_s3_bucket: "{{.PROJECT_NAME}}-database-{{.CLOUD_ENV}}"
+      TF_VAR_logs_s3_bucket: "{{.PROJECT_NAME}}-logs-{{.CLOUD_ENV}}"
+
+      # S3 Defaults
+      TF_VAR_s3_region: "{{.S3_REGION}}"
+      TF_VAR_s3_endpoint: "{{.S3_ENDPOINT}}"
+
+      # Authentication
+      TF_VAR_etcd_s3_access_key: "{{.ETCD_S3_ACCESS_KEY}}"
+      TF_VAR_etcd_s3_secret_key: "{{.ETCD_S3_SECRET_KEY}}"
+      TF_VAR_registry_s3_access_key: "{{.REGISTRY_S3_ACCESS_KEY}}"
+      TF_VAR_registry_s3_secret_key: "{{.REGISTRY_S3_SECRET_KEY}}"
+      TF_VAR_logs_s3_access_key: "{{.LOGS_S3_ACCESS_KEY}}"
+      TF_VAR_logs_s3_secret_key: "{{.LOGS_S3_SECRET_KEY}}"
+      TF_VAR_database_s3_access_key: "{{.DATABASE_S3_ACCESS_KEY}}"
+      TF_VAR_database_s3_secret_key: "{{.DATABASE_S3_SECRET_KEY}}"
+      TF_VAR_registry_htpasswd: "{{.REGISTRY_HTPASSWD}}"
+
+      # Component Versions
+      TF_VAR_ccm_version: "{{.CCM_VERSION}}"
+      TF_VAR_csi_version: "{{.CSI_VERSION}}"
+      TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
+      TF_VAR_cnpg_version: "{{.CNPG_VERSION}}"
+      TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
+      TF_VAR_cert_manager_version: "{{.CERT_MANAGER_VERSION}}"
+      TF_VAR_nats_version: "{{.NATS_VERSION}}"
+      TF_VAR_kubearmor_version: "{{.KUBEARMOR_VERSION}}"
+      TF_VAR_kyverno_version: "{{.KYVERNO_VERSION}}"
+      TF_VAR_fluent_bit_version: "{{.FLUENT_BIT_VERSION}}"
+      TF_VAR_victoria_metrics_version: "{{.VM_VERSION}}"
+      TF_VAR_loki_version: "{{.LOKI_VERSION}}"
+      TF_VAR_grafana_version: "{{.GRAFANA_VERSION}}"
+      TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
+      TF_VAR_knative_version: "{{.KNATIVE_VERSION}}"
     cmds:
-      - mkdir -p .kube
-      - until ssh -q {{.SSH_TARGET}} exit; do sleep 5; done
-      - scp {{.SSH_TARGET}}:/etc/rancher/k3s/k3s.yaml {{.KUBECONFIG_PATH}}
-      - sed -i.bak "s/127.0.0.1/{{.DNS_NAME}}/g" {{.KUBECONFIG_PATH}} && rm -f {{.KUBECONFIG_PATH}}.bak
-      - chmod 600 {{.KUBECONFIG_PATH}}
-      - echo "✅ Kubeconfig secured."
+      - echo "[TERRAFORM] {{.CMD}} -> {{.PROVIDER}} -> {{.LOCATION}} -> {{.CLOUD_ENV}}"
+      # FIX: Updated prefix to match the CloudProvider/CloudEnv format
+      - terraform init -reconfigure -backend-config="bucket={{.TFSTATE_BUCKET}}" -backend-config="prefix={{.PROVIDER}}"
+      - terraform {{.CMD}} {{.ARGS}}
 
-  infra:deploy:
-    desc: "Full Pipeline: Plan -> Apply -> Kubeconfig"
+  lint:
+    desc: "Validate and format all Terraform code"
     cmds:
-      - task: infra:plan
-      - task: infra:apply
-      - task: infra:kubeconfig
+      - task: tf:validate
+      - task: tf:fmt
 
-  infra:destroy:
-    desc: "TEARDOWN"
-    prompt: "❌ DESTROY {{.CLOUD_ENV}}? This cannot be undone."
-    deps: [_tf_init]
+  # HETZNER INFRASTRUCTURE
+  hz:plan:
+    desc: "Plan Hetzner Ashburn (Dev)"
     cmds:
-      - |
-        ENV_UPPER=$(echo "{{.CLOUD_ENV}}" | tr '[:lower:]' '[:upper:]')
-        ETCD_BUCKET=$(eval echo \$ETCD_S3_BUCKET_${ENV_UPPER})
-        ETCD_ACCESS=$(eval echo \$ETCD_S3_ACCESS_KEY_${ENV_UPPER})
-        ETCD_SECRET=$(eval echo \$ETCD_S3_SECRET_KEY_${ENV_UPPER})
-        REGISTRY_BUCKET=$(eval echo \$REGISTRY_S3_BUCKET_${ENV_UPPER})
-        REGISTRY_ACCESS=$(eval echo \$REGISTRY_S3_ACCESS_KEY_${ENV_UPPER})
-        REGISTRY_SECRET=$(eval echo \$REGISTRY_S3_SECRET_KEY_${ENV_UPPER})
-        LOGS_BUCKET=$(eval echo \$LOGS_S3_BUCKET_${ENV_UPPER})
-        LOGS_ACCESS=$(eval echo \$LOGS_S3_ACCESS_KEY_${ENV_UPPER})
-        LOGS_SECRET=$(eval echo \$LOGS_S3_SECRET_KEY_${ENV_UPPER})
+      - task: _tf
+        vars:
+          PROVIDER: "hetzner"
+          LOCATION: "ash"
+          CLOUD_ENV: "dev"
+          CMD: "plan"
+          ARGS: "-out=tfplan"
 
-        {{.TF_CMD}} destroy -auto-approve {{.TF_VARS}} \
-          -var="etcd_s3_bucket=${ETCD_BUCKET}" \
-          -var="etcd_s3_access_key=${ETCD_ACCESS}" \
-          -var="etcd_s3_secret_key=${ETCD_SECRET}" \
-          -var="registry_s3_bucket=${REGISTRY_BUCKET}" \
-          -var="registry_s3_access_key=${REGISTRY_ACCESS}" \
-          -var="registry_s3_secret_key=${REGISTRY_SECRET}" \
-          -var="logs_s3_bucket=${LOGS_BUCKET}" \
-          -var="logs_s3_access_key=${LOGS_ACCESS}" \
-          -var="logs_s3_secret_key=${LOGS_SECRET}"
-      - rm -f {{.KUBECONFIG_PATH}}
+  hz:apply:
+    desc: "Apply Hetzner Ashburn (Dev)"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "hetzner"
+          LOCATION: "ash"
+          CLOUD_ENV: "dev"
+          CMD: "apply"
+          ARGS: "-auto-approve tfplan"
 
-  dev:web:
-    desc: "Start local web development server"
+  hz:destroy:
+    desc: "Destroy Hetzner Ashburn (Dev)"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "hetzner"
+          LOCATION: "ash"
+          CLOUD_ENV: "dev"
+          CMD: "destroy"
+          ARGS: "-auto-approve"
+
+  hz:output:
+    desc: "Show Hetzner Outputs"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "hetzner"
+          LOCATION: "ash"
+          CLOUD_ENV: "dev"
+          CMD: "output"
+          ARGS: ""
+
+  hz:kubeconfig:
+    desc: "Write Hetzner Kubeconfig to disk"
+    cmds:
+      - mkdir -p ~/.kube
+      - terraform -chdir=infra/providers/hetzner output -raw kubeconfig > ~/.kube/config
+      - chmod 600 ~/.kube/config
+      - echo "✅ Kubeconfig successfully written to ~/.kube/config"
+
+  # DIGITALOCEAN INFRASTRUCTURE
+  do:plan:
+    desc: "Plan DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "digitalocean"
+          LOCATION: "nyc3"
+          CLOUD_ENV: "dev"
+          CMD: "plan"
+          ARGS: "-out=tfplan"
+
+  do:apply:
+    desc: "Apply DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "digitalocean"
+          LOCATION: "nyc3"
+          CLOUD_ENV: "dev"
+          CMD: "apply"
+          ARGS: "-auto-approve tfplan"
+
+  do:destroy:
+    desc: "Destroy DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "digitalocean"
+          LOCATION: "nyc3"
+          CLOUD_ENV: "dev"
+          CMD: "destroy"
+          ARGS: "-auto-approve"
+
+  do:output:
+    desc: "Show DigitalOcean Outputs"
+    cmds:
+      - task: _tf
+        vars:
+          PROVIDER: "digitalocean"
+          LOCATION: "nyc3"
+          CLOUD_ENV: "dev"
+          CMD: "output"
+          ARGS: ""
+
+  # APP WORKFLOWS
+  web:dev:
+    desc: "Show Web App"
     dir: web
     cmds:
       - npm run dev
+
+  # DATABASE WORKFLOWS
+  db:up:
+    desc: "Start local PostgreSQL database"
+    cmds:
+      - docker compose up -d db
+
+  db:down:
+    desc: "Stop local PostgreSQL database"
+    cmds:
+      - docker compose down
+
+  db:migrate:
+    desc: "Run database migrations (up)"
+    cmds:
+      - go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+      - migrate -path db/migrations -database "{{.DB_URL}}" up
+
+  db:migrate-down:
+    desc: "Rollback the last database migration (down 1)"
+    cmds:
+      - migrate -path db/migrations -database "{{.DB_URL}}" down 1
+
+  db:create-migration:
+    desc: "Create a new migration (usage: task db:create-migration NAME=create_users)"
+    cmds:
+      - migrate create -ext sql -dir db/migrations -seq {{.NAME}}
+    requires:
+      vars: [NAME]
+
+  db:generate:
+    desc: "Generate Go code from SQL using sqlc"
+    dir: db
+    cmds:
+      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - sqlc generate
+
+  db:setup:
+    desc: "Spin up DB, wait, migrate, and generate code"
+    cmds:
+      - task: db:up
+      - echo "Waiting for DB to be ready..."
+      - sleep 5
+      - task: db:migrate
+      - task: db:generate

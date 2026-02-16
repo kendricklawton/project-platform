@@ -1,0 +1,44 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cnpg-db
+  namespace: ${ProjectNamespace}
+spec:
+  instances: 1
+
+  affinity:
+    nodeSelector:
+      kubernetes.io/os: linux
+      node-role.kubernetes.io/agent: "true"
+    # If your CNPG version supports it (check docs for 'runtimeClassName'), otherwise
+    # you might need to whitelist the CNPG service account in the Kyverno policy.
+    # A common workaround for CNPG if strict runtimeClass isn't supported in spec:
+    # Use a mutating policy or whitelist the postgres user.
+
+  # 1. Storage
+  storage:
+    size: 10Gi
+
+  # 2. Backups (Point-in-Time Recovery)
+  backup:
+    barmanObjectStore:
+      destinationPath: "s3://${DatabaseS3Bucket}/${CloudProvider}/cnpg-backups/"
+      endpointURL: ${DatabaseS3Endpoint}
+      region: ${DatabaseS3Region}
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-secret
+          key: database-s3-access-key
+        secretAccessKey:
+          name: cnpg-secret
+          key: database-s3-secret-key
+      wal:
+        compression: gzip
+
+  # 3. Bootstrap (Init DB)
+  bootstrap:
+    initdb:
+      database: app
+      owner: appuser
+      secret:
+        name: main-db-app-auth # CNPG creates this secret with random passwords for you

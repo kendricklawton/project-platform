@@ -1,0 +1,10 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: csi-digitalocean
+  namespace: kube-system
+spec:
+  chart: csi-digitalocean
+  repo: https://digitalocean.github.io/csi-digitalocean
+  targetNamespace: kube-system
+  version: "${CSIVersion}"

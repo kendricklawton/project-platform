@@ -1,0 +1,85 @@
+# Tenant & App Namespaces
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "${ProjectNamespace}"
+  labels:
+    # Enforce standard security for tenant workloads
+    pod-security.kubernetes.io/enforce: baseline
+    platform.io/managed-by: terraform
+---
+# Observability & Logging
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    platform.io/managed-by: terraform
+---
+# Security & Policy
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno
+  labels:
+    platform.io/managed-by: terraform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubearmor
+  labels:
+    platform.io/managed-by: terraform
+---
+# Networking & Ingress
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    platform.io/managed-by: terraform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    platform.io/managed-by: terraform
+---
+# Serverless & Messaging
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: knative-serving
+  labels:
+    platform.io/managed-by: terraform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: knative-eventing
+  labels:
+    platform.io/managed-by: terraform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nats
+  labels:
+    platform.io/managed-by: terraform
+---
+# Data & Operators
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels:
+    platform.io/managed-by: terraform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    platform.io/managed-by: terraform

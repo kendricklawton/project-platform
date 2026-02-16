@@ -12,9 +12,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// -----------------------------------------------------------
-	// 1. PUBLIC / USER ROUTES
-	// -----------------------------------------------------------
+	// PUBLIC / USER ROUTES
 	r.Group(func(r chi.Router) {
 		// 1. Create the Space
 		r.Post("/projects", h.CreateProject)
@@ -22,9 +20,8 @@ func (h *Handler) Routes() chi.Router {
 		// 2. Deploy to the Space
 		r.Post("/deployments", h.CreateDeployment)
 	})
-	// -----------------------------------------------------------
-	// 2. ADMIN ROUTES
-	// -----------------------------------------------------------
+
+	// ADMIN ROUTES
 	r.Route("/admin", func(r chi.Router) {
 		// CRITICAL: Admin-only Middleware
 		// r.Use(AdminOnlyMiddleware)

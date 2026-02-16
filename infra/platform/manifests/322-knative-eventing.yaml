@@ -1,0 +1,18 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: knative-eventing
+  namespace: kube-system
+spec:
+  chart: eventing
+  repo: https://knative-sandbox.github.io/knative-on-helm
+  targetNamespace: knative-eventing
+  createNamespace: true
+  version: "${KnativeVersion}"
+  bootstrap: true
+  valuesContent: |-
+    # Force single-replica mode
+    controller:
+      replicas: 1
+    webhook:
+      replicas: 1

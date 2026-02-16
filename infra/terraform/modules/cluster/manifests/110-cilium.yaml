@@ -1,0 +1,42 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cilium
+  namespace: kube-system
+spec:
+  repo: https://helm.cilium.io/
+  chart: cilium
+  targetNamespace: kube-system
+  version: "${CiliumVersion}"
+  bootstrap: true
+  valuesContent: |-
+    k8sServiceHost: ${K8sServiceHost}
+    k8sServicePort: 6443
+    kubeProxyReplacement: true
+    mtu: 1400
+    tunnel: vxlan
+    ipam:
+      mode: kubernetes
+    operator:
+      replicas: 1
+    hubble:
+      enabled: true
+      relay:
+        enabled: true
+      ui:
+        enabled: false
+    livenessProbe:
+      enabled: true
+      timeoutSeconds: 30
+      failureThreshold: 20
+    startupProbe:
+      enabled: true
+      timeoutSeconds: 30
+      failureThreshold: 105
+    resources:
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+      requests:
+        cpu: "500m"
+        memory: "1Gi"

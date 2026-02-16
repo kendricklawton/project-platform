@@ -1,0 +1,279 @@
+#cloud-config
+hostname: ${hostname}
+manage_etc_hosts: true
+
+write_files:
+  # RESTORE NETPLAN
+  - path: /etc/netplan/60-private-net.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp7s0:
+            dhcp4: true
+            dhcp6: true  # Or false, but they must be consistent in overrides
+            # dhcp4-overrides:
+            #   use-routes: false
+            # dhcp6-overrides:
+            #   use-routes: false
+
+  # K3S REGISTRIES CONFIG
+  - path: /etc/rancher/k3s/registries.yaml
+    permissions: "0644"
+    content: |
+      mirrors:
+        "registry.project-platform:5000":
+          endpoint:
+            - "http://10.43.0.50:5000"
+
+  # GVISOR CONFIGURATION
+  - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+    permissions: "0644"
+    content: |
+      [plugins.opt]
+        path = "{{ .NodeConfig.Containerd.Opt }}"
+      [plugins.cri]
+        stream_server_address = "127.0.0.1"
+        stream_server_port = "10010"
+        enable_selinux = {{ .NodeConfig.SELinux }}
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+        runtime_type = "io.containerd.runsc.v1"
+
+  # AUDIT POLICY
+  - path: /var/lib/rancher/k3s/server/audit.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: audit.k8s.io/v1
+      kind: Policy
+      rules:
+      - level: Metadata
+
+  # K3S SERVER SERVICE
+  - path: /etc/systemd/system/k3s.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Lightweight Kubernetes
+      Documentation=https://k3s.io
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=notify
+      EnvironmentFile=-/etc/default/k3s
+      EnvironmentFile=-/etc/sysconfig/k3s
+      EnvironmentFile=-/etc/systemd/system/k3s.service.env
+      ExecStart=/usr/local/bin/k3s server
+      KillMode=process
+      Delegate=yes
+      LimitNOFILE=1048576
+      LimitNPROC=infinity
+      LimitCORE=infinity
+      TasksMax=infinity
+      TimeoutStartSec=0
+      Restart=always
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # INJECT MANIFESTS SCRIPT
+  - path: /usr/local/bin/inject-manifests.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+      mkdir -p /var/lib/rancher/k3s/server/manifests
+      ${indent(6, manifest_injector_script)}
+
+  # SERVER BOOTSTRAP SCRIPT
+  - path: /usr/local/bin/k3s-start.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+
+      echo "[Bootstrap] Injecting Manifests"
+      /usr/local/bin/inject-manifests.sh
+
+      echo "[Bootstrap] Starting Tailscale Join Loop..."
+      # Wait for Internet connectivity first
+      for i in {1..30}; do
+        if ping -c 1 8.8.8.8 >/dev/null 2>&1; then break; fi
+        echo "Waiting for internet..."
+        sleep 2
+      done
+
+      # --- DYNAMIC METADATA FETCHING ---
+      PROVIDER="${cloud_provider}"
+
+      if [ "$PROVIDER" = "hetzner" ]; then
+        METADATA_URL="http://169.254.169.254/hetzner/v1/metadata/instance-id"
+        PROVIDER_PREFIX="hcloud://"
+      elif [ "$PROVIDER" = "digitalocean" ]; then
+        METADATA_URL="http://169.254.169.254/metadata/v1/id"
+        PROVIDER_PREFIX="digitalocean://"
+      else
+        echo "CRITICAL: Unknown Cloud Provider: $PROVIDER"
+        exit 1
+      fi
+
+      echo "[Bootstrap] Fetching Server ID from $PROVIDER Metadata Service..."
+      for i in {1..10}; do
+        INSTANCE_ID=$(curl -s $METADATA_URL)
+        if [ -n "$INSTANCE_ID" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$INSTANCE_ID" ]; then
+        echo "CRITICAL: Could not fetch Server ID from metadata service"
+        exit 1
+      fi
+
+      PROVIDER_ID="$PROVIDER_PREFIX$INSTANCE_ID"
+      echo "Provider ID detected: $PROVIDER_ID"
+
+      for i in {1..30}; do
+        TS_IP=$(tailscale ip -4 2>/dev/null)
+        if [ -n "$TS_IP" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$TS_IP" ]; then
+        echo "CRITICAL: Could not get Tailscale IP"
+        exit 1
+      fi
+      echo "Tailscale IP: $TS_IP"
+
+      echo "--- [Bootstrap] Creating Config Directory ---"
+      mkdir -p /etc/rancher/k3s
+
+      echo "--- [Bootstrap] Generating K3s Config ---"
+
+      # --- STRICT PRIVATE IP ENFORCEMENT ---
+      # Loop until a valid 10.x.x.x IP is detected, up to a maximum number of retries.
+      PRIVATE_IP=""
+      MAX_RETRIES=60
+      RETRY_COUNT=0
+
+      while [ -z "$PRIVATE_IP" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Attempt 1: Route lookup (Preferred)
+        CANDIDATE=$(ip route get 10.0.0.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}')
+
+        # Attempt 2: Interface Scan (Fallback, but strictly filtered for 10.*)
+        if [[ "$CANDIDATE" != 10.* ]]; then
+          CANDIDATE=$(ip -o -4 addr list enp7s0 | awk '{print $4}' | cut -d/ -f1 | grep "^10\." | head -n 1)
+        fi
+
+        # VALIDATION: Only accept if it starts with "10."
+        if [[ "$CANDIDATE" == 10.* ]]; then
+          PRIVATE_IP="$CANDIDATE"
+          echo "Success: Found Private IP: $PRIVATE_IP"
+        else
+          echo "Waiting for Private Network... (Attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
+          sleep 2
+          RETRY_COUNT=$((RETRY_COUNT+1))
+        fi
+      done
+
+      if [ -z "$PRIVATE_IP" ]; then
+        echo "CRITICAL: Could not detect Private IP (10.x.x.x) after $MAX_RETRIES attempts. Exiting to prevent split-brain."
+        exit 1
+      fi
+
+      cat > /etc/rancher/k3s/config.yaml <<EOF
+      token: ${k3s_token}
+      node-ip: $PRIVATE_IP
+
+      # --- SECURITY: ENCRYPT SECRETS AT REST ---
+      secrets-encryption: true
+
+      tls-san:
+        - ${hostname}
+        - $TS_IP
+        - ${k3s_load_balancer_ip}
+      flannel-backend: none
+      disable-network-policy: true
+      disable-kube-proxy: true
+      disable:
+        - traefik
+        - servicelb
+        - cloud-controller
+      disable-cloud-controller: true
+
+      # ETCD SNAPSHOTS (S3/GCS) ---
+      etcd-s3: true
+      etcd-s3-endpoint: ${etcd_s3_endpoint}
+      etcd-s3-region: ${etcd_s3_region}
+      etcd-s3-access-key: ${etcd_s3_access_key}
+      etcd-s3-secret-key: ${etcd_s3_secret_key}
+      etcd-s3-bucket: ${etcd_s3_bucket}
+      etcd-s3-folder: ${cloud_provider}/etcd-snapshots
+
+      etcd-snapshot-schedule-cron: "0 */6 * * *"
+      etcd-snapshot-retention: 10
+      kubelet-arg:
+        - "cloud-provider=external"
+        - "provider-id=$PROVIDER_ID"
+        - "container-log-max-files=3"
+        - "container-log-max-size=10Mi"
+      ${k3s_cluster_setting}
+      EOF
+
+      echo "--- [Bootstrap] Starting K3s Service ---"
+      systemctl stop k3s
+      fuser -k 10258/tcp || true # Force kill anything holding the CCM port
+      systemctl daemon-reload
+      systemctl enable k3s
+      systemctl restart k3s
+
+      echo "--- [Bootstrap] Waiting for Node Registration ---"
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+      for i in {1..60}; do
+        if kubectl get node ${hostname} >/dev/null 2>&1; then
+          echo "Node is registered."
+          break
+        fi
+        sleep 2
+      done
+
+      echo "=== Server Bootstrap Complete ==="
+
+runcmd:
+  # Apply Netplan
+  - netplan generate
+  - netplan apply
+  - sleep 5
+
+  # - |
+  #   echo "Cloud Provider: ${cloud_provider}"
+  #   if [ "${cloud_provider}" = "hetzner" ] && [ -n "${network_gateway}" ]; then
+  #     echo "Adding Hetzner default gateway..."
+  #     ip route add default via ${network_gateway} dev enp7s0
+  #   fi
+
+  # Time Sync
+  - systemctl enable systemd-timesyncd
+  - systemctl start systemd-timesyncd
+  - timedatectl set-ntp true
+
+  # Tailscale Join
+  - echo "Starting Tailscale Join Loop..." > /var/log/tailscale-join.log
+  - |
+    NEXT_WAIT_TIME=0
+    until tailscale up --authkey=${tailscale_auth_key} \
+      --ssh \
+      --hostname=${hostname} \
+      --advertise-tags="tag:k3s-server" \
+      --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+    do
+      echo "Join failed. Retrying in 5 seconds..." >> /var/log/tailscale-join.log
+      sleep 5
+      NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
+    done
+
+  # Run Bootstrap
+  - /usr/local/bin/k3s-start.sh

@@ -7,25 +7,33 @@ import (
 
 	"github.com/kendricklawton/project-platform/core/internal/api"
 	"github.com/kendricklawton/project-platform/core/internal/config"
+	"github.com/kendricklawton/project-platform/core/internal/db"
 	"github.com/kendricklawton/project-platform/core/internal/k8s"
 )
 
 func main() {
-	// 1. Load Config
 	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("CRITICAL: Failed to load config: %v", err)
+	}
+
+	store, err := db.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("CRITICAL: %v", err)
 	}
+	defer store.Close()
+	log.Println("✅ Connected to PostgreSQL")
 
-	// 1. Connect to Kubernetes
 	k8sClient, err := k8s.NewClient(cfg.KubeConfigPath)
 	if err != nil {
-		log.Fatalf("Failed to connect to K8s: %v", err)
+		log.Fatalf("CRITICAL: Failed to connect to K8s: %v", err)
 	}
+	log.Println("✅ Connected to Kubernetes")
 
-	// 2. Inject K8s client into the Handler
-	handler := api.NewHandler(k8sClient)
+	handler := api.NewHandler(k8sClient, store)
 
-	// 3. Start Server
-	http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), handler.Routes())
+	log.Printf("🚀 Starting API server on port %d...", cfg.Port)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), handler.Routes()); err != nil {
+		log.Fatalf("Server crashed: %v", err)
+	}
 }
