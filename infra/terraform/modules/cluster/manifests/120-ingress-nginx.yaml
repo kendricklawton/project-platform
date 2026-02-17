@@ -10,10 +10,27 @@ spec:
   createNamespace: true
   version: "${IngressNginxVersion}"
   bootstrap: true
-  set:
-    controller.kind: "DaemonSet"
-    controller.hostNetwork: "true"
-    controller.service.type: "ClusterIP"
-    controller.config.use-proxy-protocol: "true"
-    controller.config.compute-full-forwarded-for: "true"
-    controller.config.use-forwarded-headers: "true"
+  valuesContent: |-
+    controller:
+      kind: DaemonSet
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+
+      # We do not need a Kubernetes LoadBalancer service because
+      # the external Hetzner/DO Load Balancer routes directly to the nodes.
+      service:
+        type: ClusterIP
+
+      config:
+        # Mandatory: Matches the proxyprotocol = true in your Terraform LB config
+        use-proxy-protocol: "true"
+
+      # Optional but recommended: Only run ingress pods on your worker nodes
+      nodeSelector:
+        node-role.kubernetes.io/worker: "true"
+
+      # Tolerate the agent taint if you have one
+      tolerations:
+        - key: "node-role.kubernetes.io/worker"
+          operator: "Exists"
+          effect: "NoSchedule"

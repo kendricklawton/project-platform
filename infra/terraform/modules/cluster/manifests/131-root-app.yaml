@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-bootstrap
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-bootstrap-role
+rules:
+  # Allow the Job to check if the CRD exists
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  # Allow the Job to create the Root Application
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-bootstrap-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: argocd-bootstrap-role
+subjects:
+  - kind: ServiceAccount
+    name: argocd-bootstrap
+    namespace: kube-system
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-argocd-root-app
+  namespace: kube-system
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      name: bootstrap-argocd-root-app
+    spec:
+      serviceAccountName: argocd-bootstrap
+      restartPolicy: OnFailure
+      # STEP 1: Wait for Argo CD to finish installing
+      initContainers:
+        - name: wait-for-crd
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Argo CD Application CRD to be established..."
+              kubectl wait --for=condition=established --timeout=300s crd/applications.argoproj.io
+      # STEP 2: Apply the GitOps Root App
+      containers:
+        - name: apply-root-app
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "CRD is ready. Applying Root Application..."
+              cat <<EOF | kubectl apply -f -
+              apiVersion: argoproj.io/v1alpha1
+              kind: Application
+              metadata:
+                name: platform-root
+                namespace: argocd
+                finalizers:
+                  - resources-finalizer.argocd.argoproj.io
+              spec:
+                project: default
+                source:
+                  # Injecting the dynamic variable here
+                  repoURL: "${RepoURL}"
+                  targetRevision: HEAD
+                  path: platform/apps
+                  directory:
+                    recurse: false
+                destination:
+                  server: "https://kubernetes.default.svc"
+                  namespace: argocd
+                syncPolicy:
+                  automated:
+                    prune: true
+                    selfHeal: true
+                  syncOptions:
+                    - CreateNamespace=true
+                  retry:
+                    limit: 5
+                    backoff:
+                      duration: 5s
+                      factor: 2
+                      maxDuration: 3m
+              EOF
+              echo "Root application applied successfully."

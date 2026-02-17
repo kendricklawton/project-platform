@@ -18,6 +18,12 @@ terraform {
 }
 
 # VARIABLES
+variable "cloud_provider" {
+  default = "digitalocean"
+  type    = string
+}
+
+
 variable "token" {
   description = "DigitalOcean API token"
   type        = string
@@ -50,11 +56,11 @@ variable "ssh_key_name" {
   type = string
 }
 
-variable "letsencrypt_email" {
-  type = string
+variable "github_repo_url" {
+  description = "The Git repository URL for Argo CD to sync from"
+  type        = string
 }
 
-# Auth & Storage
 variable "tailscale_auth_k3s_server_key" {
   type      = string
   sensitive = true
@@ -79,83 +85,20 @@ variable "etcd_s3_secret_key" {
   sensitive = true
 }
 
-variable "registry_s3_bucket" {
+variable "etcd_s3_endpoint" {
   type = string
 }
 
-variable "registry_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "registry_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "database_s3_bucket" {
+variable "etcd_s3_region" {
   type = string
-}
-
-variable "database_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "database_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "logs_s3_bucket" {
-  type = string
-}
-
-variable "logs_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "logs_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "s3_endpoint" {
-  type = string
-}
-
-variable "s3_region" {
-  type = string
-}
-
-variable "registry_htpasswd" {
-  type      = string
-  sensitive = true
 }
 
 # Manifest Versions
 variable "ccm_version" { type = string }
 variable "csi_version" { type = string }
 variable "cilium_version" { type = string }
-variable "cnpg_version" { type = string }
 variable "ingress_nginx_version" { type = string }
-variable "cert_manager_version" { type = string }
-variable "nats_version" { type = string }
-variable "kubearmor_version" { type = string }
-variable "kyverno_version" { type = string }
-variable "fluent_bit_version" { type = string }
-variable "victoria_metrics_version" { type = string }
-variable "loki_version" { type = string }
-variable "grafana_version" { type = string }
 variable "argocd_version" { type = string }
-variable "knative_version" { type = string }
-
-# Default Variables
-variable "cloud_provider" {
-  default = "digitalocean"
-  type    = string
-}
 
 provider "digitalocean" {
   token = var.token
@@ -260,47 +203,32 @@ module "manifests" {
   source = "../../modules/cluster"
 
   # Context
-  cloud_provider = "digitalocean"
+  cloud_provider = var.cloud_provider
   cloud_env      = var.cloud_env
   project_name   = var.project_name
   # Use the LB's private IP for Cilium bootstrap to avoid circular dependency
   k3s_api_ip = digitalocean_loadbalancer.k3s_api.private_ip
 
   # Auth
-  token                  = var.token
-  letsencrypt_email      = var.letsencrypt_email
-  etcd_s3_bucket         = var.etcd_s3_bucket
-  etcd_s3_access_key     = var.etcd_s3_access_key
-  etcd_s3_secret_key     = var.etcd_s3_secret_key
-  registry_s3_bucket     = var.registry_s3_bucket
-  registry_s3_access_key = var.registry_s3_access_key
-  registry_s3_secret_key = var.registry_s3_secret_key
-  database_s3_bucket     = var.database_s3_bucket
-  database_s3_access_key = var.database_s3_access_key
-  database_s3_secret_key = var.database_s3_secret_key
-  logs_s3_bucket         = var.logs_s3_bucket
-  logs_s3_access_key     = var.logs_s3_access_key
-  logs_s3_secret_key     = var.logs_s3_secret_key
-  s3_endpoint            = var.s3_endpoint
-  s3_region              = var.s3_region
-  registry_htpasswd      = var.registry_htpasswd
+  token = var.token
+
+  # GitHub
+  github_repo_url = var.github_repo_url
+
+
+  # ETCD Backend
+  etcd_s3_bucket     = var.etcd_s3_bucket
+  etcd_s3_access_key = var.etcd_s3_access_key
+  etcd_s3_secret_key = var.etcd_s3_secret_key
+  etcd_s3_endpoint   = var.etcd_s3_endpoint
+  etcd_s3_region     = var.etcd_s3_region
 
   # Versions
-  cnpg_version             = var.cnpg_version
-  ccm_version              = var.ccm_version
-  csi_version              = var.csi_version
-  cilium_version           = var.cilium_version
-  ingress_nginx_version    = var.ingress_nginx_version
-  cert_manager_version     = var.cert_manager_version
-  nats_version             = var.nats_version
-  kubearmor_version        = var.kubearmor_version
-  kyverno_version          = var.kyverno_version
-  fluent_bit_version       = var.fluent_bit_version
-  victoria_metrics_version = var.victoria_metrics_version
-  loki_version             = var.loki_version
-  grafana_version          = var.grafana_version
-  argocd_version           = var.argocd_version
-  knative_version          = var.knative_version
+  ccm_version           = var.ccm_version
+  csi_version           = var.csi_version
+  cilium_version        = var.cilium_version
+  ingress_nginx_version = var.ingress_nginx_version
+  argocd_version        = var.argocd_version
 }
 
 # CONTROL PLANE INIT

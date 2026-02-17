@@ -8,3 +8,4 @@ spec:
   repo: https://digitalocean.github.io/csi-digitalocean
   targetNamespace: kube-system
   version: "${CSIVersion}"
+  bootstrap: true

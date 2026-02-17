@@ -20,7 +20,7 @@ variable "hcloud_image" {
   type = string
   default = "ubuntu-22.04"
 }
-variable "hcloud_k3s_server_type" { type = string }
+variable "hcloud_server_type" { type = string }
 
 # DIGITALOCEAN CONFIG
 variable "docloud_token" {
@@ -31,7 +31,7 @@ variable "docloud_image" {
   type = string
   default = "ubuntu-22-04-x64"
 }
-variable "docloud_k3s_droplet_type" { type = string }
+variable "docloud_server_type" { type = string }
 
 # Component Versions
 variable "k3s_version" { type = string }
@@ -44,7 +44,7 @@ source "hcloud" "k3s_ash" {
   token         = var.hcloud_token
   image         = var.hcloud_image
   location      = "ash"
-  server_type   = var.hcloud_k3s_server_type
+  server_type   = var.hcloud_server_type
   ssh_username  = "root"
   snapshot_name = "ash-k3s-base-v1"
   snapshot_labels = {
@@ -60,7 +60,7 @@ source "hcloud" "k3s_hil" {
   token         = var.hcloud_token
   image         = var.hcloud_image
   location      = "hil"
-  server_type   = var.hcloud_k3s_server_type
+  server_type   = var.hcloud_server_type
   ssh_username  = "root"
   snapshot_name = "hil-k3s-base-v1"
   snapshot_labels = {
@@ -74,7 +74,7 @@ source "hcloud" "k3s_hil" {
 source "digitalocean" "k3s_nyc" {
   api_token     = var.docloud_token
   region        = "nyc3"
-  size          = var.docloud_k3s_droplet_type
+  size          = var.docloud_server_type
   image         = var.docloud_image
   ssh_username  = "root"
   snapshot_name = "nyc3-k3s-base-v1"
@@ -85,7 +85,7 @@ source "digitalocean" "k3s_nyc" {
 source "digitalocean" "k3s_sfo" {
   api_token     = var.docloud_token
   region        = "sfo3"
-  size          = var.docloud_k3s_droplet_type
+  size          = var.docloud_server_type
   image         = var.docloud_image
   ssh_username  = "root"
   snapshot_name = "sfo3-k3s-base-v1"

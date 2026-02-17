@@ -33,10 +33,6 @@ variable "token" {
   sensitive = true
 }
 
-variable "letsencrypt_email" {
-  type = string
-}
-
 variable "etcd_s3_bucket" {
   type = string
 }
@@ -51,60 +47,17 @@ variable "etcd_s3_secret_key" {
   sensitive = true
 }
 
-variable "registry_s3_bucket" {
+variable "etcd_s3_endpoint" {
   type = string
 }
 
-variable "registry_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "registry_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "database_s3_bucket" {
+variable "etcd_s3_region" {
   type = string
 }
 
-variable "database_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "database_s3_secret_key" {
-  sensitive = true
-  type      = string
-}
-
-variable "logs_s3_bucket" {
-  type      = string
-  sensitive = true
-}
-
-variable "logs_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "logs_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-
-variable "s3_region" {
-  type = string
-}
-
-variable "s3_endpoint" {
-  type = string
-}
-
-variable "registry_htpasswd" {
-  type      = string
-  sensitive = true
+variable "github_repo_url" {
+  description = "The Git repository URL for Argo CD to sync from"
+  type        = string
 }
 
 # Versions
@@ -123,22 +76,14 @@ variable "ingress_nginx_version" {
   type = string
 }
 
-variable "cert_manager_version" {
-  type = string
-}
-
 variable "argocd_version" {
   type = string
 }
 
 # Logic Engine
 locals {
-  # Path to your existing YAML files
   manifests_path = "${path.module}/manifests"
 
-  # A. CLOUD SPECIFIC MANIFESTS
-
-  # Hetzner Only
   hetzner_manifests = var.cloud_provider == "hetzner" ? {
     "001-hcloud-secret.yaml" = templatefile("${local.manifests_path}/010-hcloud-secret.yaml", {
       Token      = var.token
@@ -152,8 +97,7 @@ locals {
     })
   } : {}
 
-  # DigitalOcean Only
-  do_manifests = var.cloud_provider == "digitalocean" ? {
+  digitalocean_manifests = var.cloud_provider == "digitalocean" ? {
     "001-docloud-secret.yaml" = templatefile("${local.manifests_path}/020-docloud-secret.yaml", {
       Token = var.token
     })
@@ -165,34 +109,17 @@ locals {
     })
   } : {}
 
-  # Shared Manifests
-  common_manifests = {
-    # Namespaces
-    "000-terraform-namespaces.yaml" = templatefile("${local.manifests_path}/000-terraform-namespaces.yaml", {
-      ProjectNamespace = var.project_name
-    })
-
-    # Runtime
+  core_manifests = {
     "100-gvisor-runtime.yaml" = file("${local.manifests_path}/100-gvisor-runtime.yaml")
-
-    # Networking (Cilium needs the API IP injected)
     "110-cilium.yaml" = templatefile("${local.manifests_path}/110-cilium.yaml", {
       CiliumVersion  = var.cilium_version
       K8sServiceHost = var.k3s_api_ip
     })
-
     "120-ingress-nginx.yaml" = templatefile("${local.manifests_path}/120-ingress-nginx.yaml", {
       IngressNginxVersion = var.ingress_nginx_version
     })
-    # "130-cert-manager.yaml" = templatefile("${local.manifests_path}/130-cert-manager.yaml", {
-    #   CertManagerVersion = var.cert_manager_version
-    # })
-    # "140-letsencrypt-issuer.yaml" = templatefile("${local.manifests_path}/140-letsencrypt-issuer.yaml", {
-    #   LetsEncryptEmail = var.letsencrypt_email
-    #   CloudEnv         = var.cloud_env
-    # })
-    # "150-argocd.yaml" = file("${local.manifests_path}/150-argocd.yaml")
-    # "151-root-app.yaml" = templatefile("${local.manifests_path}/151-root-app.yaml", {
+    # "130-argocd.yaml" = file("${local.manifests_path}/130-argocd.yaml")
+    # "131-root-app.yaml" = templatefile("${local.manifests_path}/131-root-app.yaml", {
     #   ArgoVersion   = var.argocd_version
     #   CloudProvider = var.cloud_provider
     #   CloudEnv      = var.cloud_env
@@ -201,12 +128,11 @@ locals {
   }
 }
 
-# Output
 output "manifests" {
   description = "The merged map of filenames to content"
   value = merge(
-    local.common_manifests,
+    local.core_manifests,
     local.hetzner_manifests,
-    local.do_manifests
+    local.digitalocean_manifests
   )
 }

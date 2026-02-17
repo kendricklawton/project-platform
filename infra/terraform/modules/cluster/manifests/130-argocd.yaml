@@ -1,3 +1,4 @@
+# Core GitOps Engine
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -16,6 +17,10 @@ spec:
       enabled: false
     controller:
       replicas: 1
+    repoServer:
+      replicas: 1
+    applicationSet:
+      replicas: 1
     server:
       replicas: 1
       # 2. Disable internal TLS (Let Nginx handle it)
@@ -28,19 +33,13 @@ spec:
         annotations:
           cert-manager.io/cluster-issuer: "letsencrypt-${CloudEnv}"
           nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-          # SSL Passthrough is NOT needed because we are running with --insecure
         hosts:
           - "${ArgoHost}"
         tls:
           - secretName: argocd-tls
             hosts:
               - "${ArgoHost}"
-    # 4. Persistence (Save config if pod restarts)
-    server:
+      # 4. Persistence (Save config if pod restarts)
       volumeMounts:
         - mountPath: /app/config
           name: argocd-cmd-params-cm-mount
-    repoServer:
-      replicas: 1
-    applicationSet:
-      replicas: 1

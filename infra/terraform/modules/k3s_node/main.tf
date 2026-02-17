@@ -58,6 +58,7 @@ variable "etcd_s3_endpoint" {
   type    = string
   default = ""
 }
+
 variable "network_gateway" {
   type        = string
   description = "The gateway IP for Hetzner networking"

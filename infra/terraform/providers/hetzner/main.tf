@@ -18,6 +18,11 @@ terraform {
 }
 
 # VARIABLES
+variable "cloud_provider" {
+  default = "hetzner"
+  type    = string
+}
+
 variable "token" {
   type      = string
   sensitive = true
@@ -38,63 +43,59 @@ variable "load_balancer_type" {
   type        = string
 }
 
-variable "location" { type = string }
-variable "project_name" { type = string }
-variable "cloud_env" { type = string }
-variable "ssh_key_name" { type = string }
-variable "letsencrypt_email" { type = string }
+variable "location" {
+  type = string
+}
+
+variable "project_name" {
+  type = string
+}
+
+variable "cloud_env" {
+  type = string
+}
+
+variable "ssh_key_name" {
+  type = string
+}
+
+variable "github_repo_url" {
+  description = "The Git repository URL for Argo CD to sync from"
+  type        = string
+}
 
 variable "tailscale_auth_k3s_server_key" {
   type      = string
   sensitive = true
 }
+
 variable "tailscale_auth_k3s_agent_key" {
   type      = string
   sensitive = true
 }
-variable "etcd_s3_bucket" { type = string }
+
+variable "etcd_s3_bucket" {
+  type = string
+}
+
 variable "etcd_s3_access_key" {
   type      = string
   sensitive = true
 }
+
 variable "etcd_s3_secret_key" {
   type      = string
   sensitive = true
 }
-variable "registry_s3_bucket" { type = string }
-variable "registry_s3_access_key" {
-  type      = string
-  sensitive = true
+
+variable "etcd_s3_endpoint" {
+  type = string
 }
-variable "registry_s3_secret_key" {
-  type      = string
-  sensitive = true
+
+variable "etcd_s3_region" {
+  type = string
 }
-variable "database_s3_bucket" { type = string }
-variable "database_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-variable "database_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-variable "logs_s3_bucket" { type = string }
-variable "logs_s3_access_key" {
-  type      = string
-  sensitive = true
-}
-variable "logs_s3_secret_key" {
-  type      = string
-  sensitive = true
-}
-variable "s3_endpoint" { type = string }
-variable "s3_region" { type = string }
-variable "registry_htpasswd" { sensitive = true }
-variable "cloud_provider" {
-  default = "hetzner"
-  type    = string
-}
+
 variable "network_gateway" {
   type        = string
   description = "The gateway IP for Hetzner networking"
@@ -102,13 +103,24 @@ variable "network_gateway" {
 }
 
 # Manifest Versions
-variable "ccm_version" { type = string }
-variable "csi_version" { type = string }
-variable "cilium_version" { type = string }
-variable "ingress_nginx_version" { type = string }
-variable "cert_manager_version" { type = string }
-variable "argocd_version" { type = string }
+variable "ccm_version" {
+  type = string
+}
 
+variable "csi_version" {
+  type = string
+}
+
+variable "cilium_version" {
+  type = string
+}
+variable "ingress_nginx_version" {
+  type = string
+}
+
+variable "argocd_version" {
+  type = string
+}
 
 provider "hcloud" {
   token = var.token
@@ -251,35 +263,28 @@ module "manifests" {
   cloud_env      = var.cloud_env
   project_name   = var.project_name
 
-  # REFACTOR: Use the init node IP for Cilium bootstrap to avoid LB deadlock
+  # Use the init node IP for Cilium bootstrap to avoid LB deadlock
   k3s_api_ip  = local.k3s_init_node_ip
   k3s_network = hcloud_network.k3s_main.name
 
   # Auth
-  token                  = var.token
-  letsencrypt_email      = var.letsencrypt_email
-  etcd_s3_bucket         = var.etcd_s3_bucket
-  etcd_s3_access_key     = var.etcd_s3_access_key
-  etcd_s3_secret_key     = var.etcd_s3_secret_key
-  registry_s3_bucket     = var.registry_s3_bucket
-  registry_s3_access_key = var.registry_s3_access_key
-  registry_s3_secret_key = var.registry_s3_secret_key
-  database_s3_bucket     = var.database_s3_bucket
-  database_s3_access_key = var.database_s3_access_key
-  database_s3_secret_key = var.database_s3_secret_key
-  logs_s3_bucket         = var.logs_s3_bucket
-  logs_s3_access_key     = var.logs_s3_access_key
-  logs_s3_secret_key     = var.logs_s3_secret_key
-  s3_endpoint            = var.s3_endpoint
-  s3_region              = var.s3_region
-  registry_htpasswd      = var.registry_htpasswd
+  token = var.token
+
+  # GitHub
+  github_repo_url = var.github_repo_url
+
+  # ETCD Backend
+  etcd_s3_bucket     = var.etcd_s3_bucket
+  etcd_s3_access_key = var.etcd_s3_access_key
+  etcd_s3_secret_key = var.etcd_s3_secret_key
+  etcd_s3_endpoint   = var.etcd_s3_endpoint
+  etcd_s3_region     = var.etcd_s3_region
 
   # Versions
   ccm_version           = var.ccm_version
   csi_version           = var.csi_version
   cilium_version        = var.cilium_version
   ingress_nginx_version = var.ingress_nginx_version
-  cert_manager_version  = var.cert_manager_version
   argocd_version        = var.argocd_version
 }
 
@@ -308,8 +313,8 @@ module "config_k3s_cp_init" {
   etcd_s3_access_key = var.etcd_s3_access_key
   etcd_s3_secret_key = var.etcd_s3_secret_key
   etcd_s3_bucket     = var.etcd_s3_bucket
-  etcd_s3_region     = var.s3_region
-  etcd_s3_endpoint   = var.s3_endpoint
+  etcd_s3_region     = var.etcd_s3_region
+  etcd_s3_endpoint   = var.etcd_s3_endpoint
 }
 
 resource "hcloud_server" "k3s_cp_init" {
@@ -371,8 +376,8 @@ module "config_k3s_cp_join" {
   etcd_s3_access_key   = var.etcd_s3_access_key
   etcd_s3_secret_key   = var.etcd_s3_secret_key
   etcd_s3_bucket       = var.etcd_s3_bucket
-  etcd_s3_region       = var.s3_region
-  etcd_s3_endpoint     = var.s3_endpoint
+  etcd_s3_region       = var.etcd_s3_region
+  etcd_s3_endpoint     = var.etcd_s3_endpoint
 }
 
 resource "hcloud_server" "cp_join" {

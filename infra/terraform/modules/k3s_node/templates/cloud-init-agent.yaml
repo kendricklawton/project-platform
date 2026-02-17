@@ -13,10 +13,6 @@ write_files:
           enp7s0:
             dhcp4: true
             dhcp6: true  # Or false, but they must be consistent in overrides
-            # dhcp4-overrides:
-            #   use-routes: false
-            # dhcp6-overrides:
-            #   use-routes: false
 
   # K3S REGISTRIES CONFIG
   - path: /etc/rancher/k3s/registries.yaml

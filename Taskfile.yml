@@ -10,12 +10,17 @@ vars:
 
   # DigitalOcean
   DOCLOUD_IMAGE: "ubuntu-22-04-x64"
-  DOCLOUD_K3S_DROPLET_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_MASTER_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_WORKER_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_PACKER_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_LB_TYPE: "s-4vcpu-8gb"
   DOCLOUD_TOKEN: "{{.DOCLOUD_TOKEN}}"
 
   # Hetzner
   HCLOUD_IMAGE: "ubuntu-22.04"
-  HCLOUD_K3S_SERVER_TYPE: "cpx31"
+  HCLOUD_MASTER_TYPE: "cpx31"
+  HCLOUD_WORKER_TYPE: "cpx31"
+  HCLOUD_PACKER_TYPE: "cpx31"
   HCLOUD_LB_TYPE: "lb11"
   HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
 
@@ -44,6 +49,24 @@ vars:
   DATABASE_URL: "{{.DATABASE_URL}}"
 
 tasks:
+  # GCP SECRET MANAGEMENT (Manual Seeding)
+  # Usage: task gcp:secret:set NAME=registry-s3-key VALUE=your-actual-key
+  gcp:secret:set:
+    desc: "Push a secret value to GCP Secret Manager"
+    cmds:
+      - |
+        if ! gcloud secrets list --filter="name:{{.NAME}}" --project {{.GCP_PROJECT_ID}} | grep -q {{.NAME}}; then
+          gcloud secrets create {{.NAME}} --replication-policy="automatic" --project {{.GCP_PROJECT_ID}}
+        fi
+      - echo -n "{{.VALUE}}" | gcloud secrets versions add {{.NAME}} --data-file=- --project {{.GCP_PROJECT_ID}}
+    requires:
+      vars: [NAME, VALUE]
+
+  gcp:secret:list:
+    desc: "List all platform secrets in GCP"
+    cmds:
+      - gcloud secrets list --project {{.GCP_PROJECT_ID}}
+
   # PACKER WORKFLOWS
   _packer_build:
     internal: true
@@ -57,9 +80,9 @@ tasks:
       - >-
         packer build {{.BUILD_ARGS}}
         -var "hcloud_image={{.HCLOUD_IMAGE}}"
-        -var "hcloud_k3s_server_type={{.HCLOUD_K3S_SERVER_TYPE}}"
+        -var "hcloud_server_type={{.HCLOUD_PACKER_TYPE}}"
         -var "docloud_image={{.DOCLOUD_IMAGE}}"
-        -var "docloud_k3s_droplet_type={{.DOCLOUD_K3S_DROPLET_TYPE}}"
+        -var "docloud_server_type={{.DOCLOUD_PACKER_TYPE}}"
         -var "k3s_version={{.K3S_VERSION}}"
         -var "gvisor_version={{.GVISOR_VERSION}}"
         {{.PACKER_DIR}}/ubuntu.pkr.hcl
@@ -97,42 +120,27 @@ tasks:
 
       # TF_VAR Data
       TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
-      TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
-      TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
-      TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}""{{end}}'
+      TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_MASTER_TYPE}}{{else}}{{.DOCLOUD_MASTER_TYPE}}{{end}}'
+      TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_WORKER_TYPE}}{{else}}{{.DOCLOUD_WORKER_TYPE}}{{end}}'
+      TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}{{.DOCLOUD_LB_TYPE}}{{end}}'
       TF_VAR_location: "{{.LOCATION}}"
       TF_VAR_project_name: "{{.PROJECT_NAME}}"
       TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
       TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
-      TF_VAR_letsencrypt_email: "{{.LETSENCRYPT_EMAIL}}"
+      TF_VAR_github_repo_url: "{{.GITHUB_REPO_URL}}"
       TF_VAR_tailscale_auth_k3s_server_key: "{{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
       TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
       TF_VAR_etcd_s3_bucket: "{{.PROJECT_NAME}}-etcd-{{.CLOUD_ENV}}"
-      TF_VAR_registry_s3_bucket: "{{.PROJECT_NAME}}-registry-{{.CLOUD_ENV}}"
-      TF_VAR_database_s3_bucket: "{{.PROJECT_NAME}}-database-{{.CLOUD_ENV}}"
-      TF_VAR_logs_s3_bucket: "{{.PROJECT_NAME}}-logs-{{.CLOUD_ENV}}"
-
-      # S3 Defaults
-      TF_VAR_s3_region: "{{.S3_REGION}}"
-      TF_VAR_s3_endpoint: "{{.S3_ENDPOINT}}"
-
-      # Authentication
+      TF_VAR_etcd_s3_region: "{{.S3_REGION}}"
+      TF_VAR_etcd_s3_endpoint: "https://storage.googleapis.com"
       TF_VAR_etcd_s3_access_key: "{{.ETCD_S3_ACCESS_KEY}}"
       TF_VAR_etcd_s3_secret_key: "{{.ETCD_S3_SECRET_KEY}}"
-      TF_VAR_registry_s3_access_key: "{{.REGISTRY_S3_ACCESS_KEY}}"
-      TF_VAR_registry_s3_secret_key: "{{.REGISTRY_S3_SECRET_KEY}}"
-      TF_VAR_logs_s3_access_key: "{{.LOGS_S3_ACCESS_KEY}}"
-      TF_VAR_logs_s3_secret_key: "{{.LOGS_S3_SECRET_KEY}}"
-      TF_VAR_database_s3_access_key: "{{.DATABASE_S3_ACCESS_KEY}}"
-      TF_VAR_database_s3_secret_key: "{{.DATABASE_S3_SECRET_KEY}}"
-      TF_VAR_registry_htpasswd: "{{.REGISTRY_HTPASSWD}}"
 
       # Component Versions
       TF_VAR_ccm_version: "{{.CCM_VERSION}}"
       TF_VAR_csi_version: "{{.CSI_VERSION}}"
-      TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
       TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
-      TF_VAR_cert_manager_version: "{{.CERT_MANAGER_VERSION}}"
+      TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
       TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
     cmds:
       - echo "[TERRAFORM] {{.CMD}} -> {{.PROVIDER}} -> {{.LOCATION}} -> {{.CLOUD_ENV}}"

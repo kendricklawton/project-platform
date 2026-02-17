@@ -1,0 +1,100 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: fluent-bit
+  namespace: kube-system
+spec:
+  chart: fluent-bit
+  repo: https://fluent.github.io/helm-charts
+  targetNamespace: observability
+  createNamespace: true
+  version: "${FluentBitVersion}"
+  bootstrap: true
+  valuesContent: |-
+    # 1. Inject Secrets as Environment Variables
+    # These become available to the Fluent Bit process to use in the config below.
+    env:
+      - name: LOGS_S3_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: fluent-bit-secret
+            key: logs-s3-access-key
+      - name: LOGS_S3_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: fluent-bit-secret
+            key: logs-s3-secret-key
+
+    serviceAccount:
+      create: true
+      name: fluent-bit
+
+    config:
+      inputs: |
+        [INPUT]
+            Name tail
+            Path /var/log/containers/*.log
+            Parser docker
+            Tag kube.*
+            Mem_Buf_Limit 5MB
+            Skip_Long_Lines On
+            Refresh_Interval 10
+
+      filters: |
+        # 1. Enrich logs with Kubernetes Metadata
+        [FILTER]
+            Name kubernetes
+            Match kube.*
+            Merge_Log On
+            Keep_Log Off
+            K8s-Logging.Parser On
+            K8s-Logging.Exclude On
+
+        # 2. LOOP PROTECTION: Drop logs from monitoring and logging namespaces
+        [FILTER]
+            Name grep
+            Match kube.*
+            Exclude $kubernetes['namespace_name'] observability
+
+        # 3. REWRITE TAGS: Organize logs by Namespace and App
+        # Changes tag from "kube.*" to "gcs.<namespace>.<app>"
+        [FILTER]
+            Name rewrite_tag
+            Match kube.*
+            Rule $kubernetes['labels']['app'] ^(.+)$ gcs.$kubernetes['namespace_name'].$1 false
+            Emitter_Name re_emitted
+
+        # 3b. Fallback for pods without an 'app' label (uses Pod Name)
+        [FILTER]
+            Name rewrite_tag
+            Match kube.*
+            Rule $kubernetes['namespace_name'] ^(.+)$ gcs.$1.$kubernetes['pod_name'] false
+            Emitter_Name re_emitted
+
+    outputs: |
+      # 1. HOT STORAGE (Loki)
+      [OUTPUT]
+          Name loki
+          Match gcs.*
+          Host loki.observability.svc.cluster.local
+          Port 3100
+          Labels job=fluentbit
+          LabelKeys app,job,namespace,pod
+
+      # 2. COLD STORAGE (GCS/S3)
+      # Note the usage of ${CloudEnv} which pulls from the 'env' section above
+      [OUTPUT]
+          Name s3
+          Match gcs.*
+          bucket ${LogsS3Bucket}
+          region ${LogsS3Region}
+          endpoint ${LogsS3Endpoint}
+          access_key_id {{.LOGS_S3_ACCESS_KEY}}
+          secret_access_key {{.LOGS_S3_SECRET_KEY}}
+
+          # $TAG[1] = Namespace, $TAG[2] = App Name
+          s3_key_format /${CloudProvider}/fluent-bit/$TAG[1]/$TAG[2]/%Y/%m/%d/%H-%M-%S.log
+
+          total_file_size 10M
+          upload_timeout 1m
+          use_put_object On
