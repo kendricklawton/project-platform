@@ -119,10 +119,6 @@ variable "cilium_version" {
   type = string
 }
 
-variable "cnpg_version" {
-  type = string
-}
-
 variable "ingress_nginx_version" {
   type = string
 }
@@ -131,39 +127,7 @@ variable "cert_manager_version" {
   type = string
 }
 
-variable "nats_version" {
-  type = string
-}
-
-variable "kubearmor_version" {
-  type = string
-}
-
-variable "kyverno_version" {
-  type = string
-}
-
-variable "fluent_bit_version" {
-  type = string
-}
-
-variable "victoria_metrics_version" {
-  type = string
-}
-
-variable "loki_version" {
-  type = string
-}
-
-variable "grafana_version" {
-  type = string
-}
-
 variable "argocd_version" {
-  type = string
-}
-
-variable "knative_version" {
   type = string
 }
 
@@ -204,7 +168,7 @@ locals {
   # Shared Manifests
   common_manifests = {
     # Namespaces
-    "000-namespaces.yaml" = templatefile("${local.manifests_path}/000-namespaces.yaml", {
+    "000-terraform-namespaces.yaml" = templatefile("${local.manifests_path}/000-terraform-namespaces.yaml", {
       ProjectNamespace = var.project_name
     })
 

@@ -1,0 +1,35 @@
+apiVersion: kpack.io/v1alpha2
+kind: ClusterStore
+metadata:
+  name: polyglot-store
+spec:
+  sources:
+    - image: gcr.io/paketo-buildpacks/go
+    - image: gcr.io/paketo-buildpacks/nodejs
+    - image: gcr.io/paketo-buildpacks/python
+    - image: gcr.io/paketo-community/rust
+---
+apiVersion: kpack.io/v1alpha2
+kind: ClusterBuilder
+metadata:
+  name: platform-builder
+spec:
+  serviceAccountRef:
+    name: builder-sa
+    namespace: kpack
+  tag: 10.43.0.50:5000/platform/builder:latest
+  stack:
+    name: base-stack
+    kind: ClusterStack
+  store:
+    name: polyglot-store
+    kind: ClusterStore
+  order:
+    - group:
+        - id: paketo-buildpacks/go
+    - group:
+        - id: paketo-buildpacks/nodejs
+    - group:
+        - id: paketo-buildpacks/python
+    - group:
+        - id: paketo-community/rust

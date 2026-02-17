@@ -1,0 +1,71 @@
+# Primary Platform API & Main Tenant
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "${ProjectNamespace}"
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    platform.io/managed-by: argocd
+---
+# Observability & Central Nervous System
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    platform.io/managed-by: argocd
+---
+# Security Guards & Policy Enforcement
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno
+  labels:
+    platform.io/managed-by: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubearmor
+  labels:
+    platform.io/managed-by: argocd
+---
+# Serverless Compute & Eventing
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: knative-serving
+  labels:
+    platform.io/managed-by: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: knative-eventing
+  labels:
+    platform.io/managed-by: argocd
+---
+# Messaging Backbone (NATS JetStream)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nats
+  labels:
+    platform.io/managed-by: argocd
+---
+# Data Persistence & DB Operators (CloudNativePG)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels:
+    platform.io/managed-by: argocd
+---
+# Polyglot Build Engine (kpack & Paketo)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kpack
+  labels:
+    platform.io/managed-by: argocd
+    pod-security.kubernetes.io/enforce: baseline # Safe for unprivileged builds

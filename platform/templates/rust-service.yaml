@@ -1,0 +1,20 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${APP_NAME}
+  namespace: ${USER_NAMESPACE}
+  labels:
+    platform.io/language: "rust"
+spec:
+  template:
+    spec:
+      runtimeClassName: gvisor
+      containers:
+        - image: ${REGISTRY_URL}/${USER_NAMESPACE}/${APP_NAME}:${IMAGE_TAG}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: NATS_URL
+              value: "nats://nats.nats.svc.cluster.local:4222"

@@ -1,0 +1,24 @@
+# Core GitOps Engine
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    platform.io/managed-by: terraform
+---
+# Networking & External Connectivity
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    pod-security.kubernetes.io/enforce: privileged # Required for hostNetwork/eBPF
+    platform.io/managed-by: terraform
+---
+# Foundational TLS Management
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    platform.io/managed-by: terraform

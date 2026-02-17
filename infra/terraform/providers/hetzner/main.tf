@@ -105,18 +105,9 @@ variable "network_gateway" {
 variable "ccm_version" { type = string }
 variable "csi_version" { type = string }
 variable "cilium_version" { type = string }
-variable "cnpg_version" { type = string }
 variable "ingress_nginx_version" { type = string }
 variable "cert_manager_version" { type = string }
-variable "nats_version" { type = string }
-variable "kubearmor_version" { type = string }
-variable "kyverno_version" { type = string }
-variable "fluent_bit_version" { type = string }
-variable "victoria_metrics_version" { type = string }
-variable "loki_version" { type = string }
-variable "grafana_version" { type = string }
 variable "argocd_version" { type = string }
-variable "knative_version" { type = string }
 
 
 provider "hcloud" {
@@ -127,9 +118,11 @@ locals {
   prefix = "${var.location}-${var.cloud_env}"
 
   # Dynamic IP calculation to prevent circular dependencies
-  nodes_cidr       = "10.0.1.0/24"
-  k3s_init_node_ip = cidrhost(local.nodes_cidr, 254) # 10.0.1.254
-  k3s_api_lb_ip    = cidrhost(local.nodes_cidr, 253) # 10.0.1.253
+  nodes_cidr        = "10.0.1.0/24"
+  k3s_init_node_ip  = cidrhost(local.nodes_cidr, 254) # 10.0.1.254
+  k3s_api_lb_ip     = cidrhost(local.nodes_cidr, 253) # 10.0.1.253
+  k3s_ingress_lb_ip = cidrhost(local.nodes_cidr, 252) # 10.0.1.252
+
 
   config = {
     dev  = { master_count = 1, worker_count = 1 }
@@ -208,6 +201,7 @@ resource "hcloud_load_balancer" "k3s_ingress" {
 resource "hcloud_load_balancer_network" "k3s_ingress_net" {
   load_balancer_id = hcloud_load_balancer.k3s_ingress.id
   network_id       = hcloud_network.k3s_main.id
+  ip               = local.k3s_ingress_lb_ip
   depends_on       = [hcloud_network_subnet.k3s_nodes]
 }
 
@@ -281,21 +275,12 @@ module "manifests" {
   registry_htpasswd      = var.registry_htpasswd
 
   # Versions
-  cnpg_version             = var.cnpg_version
-  ccm_version              = var.ccm_version
-  csi_version              = var.csi_version
-  cilium_version           = var.cilium_version
-  ingress_nginx_version    = var.ingress_nginx_version
-  cert_manager_version     = var.cert_manager_version
-  nats_version             = var.nats_version
-  kubearmor_version        = var.kubearmor_version
-  kyverno_version          = var.kyverno_version
-  fluent_bit_version       = var.fluent_bit_version
-  victoria_metrics_version = var.victoria_metrics_version
-  loki_version             = var.loki_version
-  grafana_version          = var.grafana_version
-  argocd_version           = var.argocd_version
-  knative_version          = var.knative_version
+  ccm_version           = var.ccm_version
+  csi_version           = var.csi_version
+  cilium_version        = var.cilium_version
+  ingress_nginx_version = var.ingress_nginx_version
+  cert_manager_version  = var.cert_manager_version
+  argocd_version        = var.argocd_version
 }
 
 # CONTROL PLANE INIT

@@ -8,7 +8,7 @@ spec:
   repo: https://kyverno.github.io/kyverno/
   targetNamespace: kyverno
   createNamespace: true
-  version: "${KyvernoVersion}" # e.g., 3.0.0
+  version: "${KyvernoVersion}"
   bootstrap: true
   valuesContent: |-
     admissionController:

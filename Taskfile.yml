@@ -131,21 +131,11 @@ tasks:
       TF_VAR_ccm_version: "{{.CCM_VERSION}}"
       TF_VAR_csi_version: "{{.CSI_VERSION}}"
       TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
-      TF_VAR_cnpg_version: "{{.CNPG_VERSION}}"
       TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
       TF_VAR_cert_manager_version: "{{.CERT_MANAGER_VERSION}}"
-      TF_VAR_nats_version: "{{.NATS_VERSION}}"
-      TF_VAR_kubearmor_version: "{{.KUBEARMOR_VERSION}}"
-      TF_VAR_kyverno_version: "{{.KYVERNO_VERSION}}"
-      TF_VAR_fluent_bit_version: "{{.FLUENT_BIT_VERSION}}"
-      TF_VAR_victoria_metrics_version: "{{.VM_VERSION}}"
-      TF_VAR_loki_version: "{{.LOKI_VERSION}}"
-      TF_VAR_grafana_version: "{{.GRAFANA_VERSION}}"
       TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
-      TF_VAR_knative_version: "{{.KNATIVE_VERSION}}"
     cmds:
       - echo "[TERRAFORM] {{.CMD}} -> {{.PROVIDER}} -> {{.LOCATION}} -> {{.CLOUD_ENV}}"
-      # FIX: Updated prefix to match the CloudProvider/CloudEnv format
       - terraform init -reconfigure -backend-config="bucket={{.TFSTATE_BUCKET}}" -backend-config="prefix={{.PROVIDER}}"
       - terraform {{.CMD}} {{.ARGS}}
 

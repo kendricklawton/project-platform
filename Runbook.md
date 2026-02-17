@@ -24,7 +24,7 @@ IMPORTANT
     - **Messaging:** NATS.
     - **Security:** KubeArmor & Kyverno for policy enforcement and runtime security.
     - **Observability:** VictoriaMetrics, Loki, Grafana, and Fluent Bit.
-    - **GitOps:** ArgoCD for declarative application management.
+    - 
 
 ---
 
