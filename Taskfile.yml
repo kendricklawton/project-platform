@@ -4,7 +4,6 @@ dotenv: [".env"]
 
 vars:
   PROJECT_NAME: "project-platform"
-  ADMIN_IP: "{{.ADMIN_IP}}"
 
   # PACKER CONFIG
   PACKER_DIR: "infra/packer"
@@ -97,9 +96,6 @@ tasks:
       HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
 
       # TF_VAR Data
-      # TF_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
-      # TF_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
-      TF_VAR_admin_ip: "{{.ADMIN_IP}}"
       TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
       TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
       TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_DROPLET_TYPE}}{{end}}'
