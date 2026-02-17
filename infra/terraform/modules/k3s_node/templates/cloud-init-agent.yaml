@@ -162,11 +162,6 @@ write_files:
       server: https://${k3s_url}
       token: ${k3s_token}
       node-ip: $PRIVATE_IP
-      disable-network-policy: true
-      disable-kube-proxy: true
-      disable:
-        - traefik
-        - servicelb
       kubelet-arg:
         - "cloud-provider=external"
         - "provider-id=$PROVIDER_ID"
