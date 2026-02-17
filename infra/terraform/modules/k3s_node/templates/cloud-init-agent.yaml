@@ -158,8 +158,7 @@ write_files:
       server: https://${k3s_url}
       token: ${k3s_token}
       node-ip: $PRIVATE_IP
-      node-label:
-              - "node-role.kubernetes.io/worker=true"
+
       kubelet-arg:
         - "cloud-provider=external"
         - "provider-id=$PROVIDER_ID"

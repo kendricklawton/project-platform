@@ -24,13 +24,3 @@ spec:
       config:
         # Mandatory: Matches the proxyprotocol = true in your Terraform LB config
         use-proxy-protocol: "true"
-
-      # Optional but recommended: Only run ingress pods on your worker nodes
-      nodeSelector:
-        node-role.kubernetes.io/worker: "true"
-
-      # Tolerate the agent taint if you have one
-      tolerations:
-        - key: "node-role.kubernetes.io/worker"
-          operator: "Exists"
-          effect: "NoSchedule"
