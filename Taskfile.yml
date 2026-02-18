@@ -7,22 +7,21 @@ vars:
 
   # PACKER CONFIG
   PACKER_DIR: "infra/packer"
+  PACKER_IMAGE: "ubuntu-22-04-x64"
 
-  # DigitalOcean
-  DOCLOUD_IMAGE: "ubuntu-22-04-x64"
+  # Packer & Terraform Variables - DigitalOcean
+  DOCLOUD_NAT_IMAGE: "ubuntu-22-04-x64"
+  DOCLOUD_NAT_TYPE: "s-1vcpu-1gb"
   DOCLOUD_MASTER_TYPE: "s-4vcpu-8gb"
   DOCLOUD_WORKER_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_PACKER_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_LB_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_TOKEN: "{{.DOCLOUD_TOKEN}}"
+  DOCLOUD_LB_TYPE: "s-4vcpu-8gb" # ???
 
-  # Hetzner
-  HCLOUD_IMAGE: "ubuntu-22.04"
+  # Packer & Terraform Variables - Hetzner
+  HCLOUD_NAT_IMAGE: "ubuntu-22.04"
+  HCLOUD_NAT_TYPE: "cpx11"
   HCLOUD_MASTER_TYPE: "cpx31"
   HCLOUD_WORKER_TYPE: "cpx31"
-  HCLOUD_PACKER_TYPE: "cpx31"
   HCLOUD_LB_TYPE: "lb11"
-  HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
 
   # COMPONENT VERSIONS
   K3S_VERSION: "v1.29.1+k3s2"
@@ -79,12 +78,10 @@ tasks:
       - packer init {{.PACKER_DIR}}
       - >-
         packer build {{.BUILD_ARGS}}
-        -var "hcloud_image={{.HCLOUD_IMAGE}}"
-        -var "hcloud_server_type={{.HCLOUD_PACKER_TYPE}}"
-        -var "docloud_image={{.DOCLOUD_IMAGE}}"
-        -var "docloud_server_type={{.DOCLOUD_PACKER_TYPE}}"
-        -var "k3s_version={{.K3S_VERSION}}"
-        -var "gvisor_version={{.GVISOR_VERSION}}"
+        -var "docloud_nat_image={{.DOCLOUD_NAT_IMAGE}}"
+        -var "docloud_nat_type={{.DOCLOUD_NAT_TYPE}}"
+        -var "hcloud_nat_image={{.HCLOUD_NAT_IMAGE}}"
+        -var "hcloud_nat_type={{.HCLOUD_NAT_TYPE}}"
         {{.PACKER_DIR}}/ubuntu.pkr.hcl
 
   packer:hz:
@@ -120,6 +117,7 @@ tasks:
 
       # TF_VAR Data
       TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
+      TF_VAR_nat_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_NAT_TYPE}}{{else}}{{.DOCLOUD_NAT_TYPE}}{{end}}'
       TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_MASTER_TYPE}}{{else}}{{.DOCLOUD_MASTER_TYPE}}{{end}}'
       TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_WORKER_TYPE}}{{else}}{{.DOCLOUD_WORKER_TYPE}}{{end}}'
       TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}{{.DOCLOUD_LB_TYPE}}{{end}}'
@@ -128,8 +126,9 @@ tasks:
       TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
       TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
       TF_VAR_github_repo_url: "{{.GITHUB_REPO_URL}}"
-      TF_VAR_tailscale_auth_k3s_server_key: "{{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
-      TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_K3S_AGENT_KEY}}"
+      TF_VAR_tailscale_oauth_client_id: "{{.TAILSCALE_OAUTH_CLIENT_ID}}"
+      TF_VAR_tailscale_oauth_client_secret: "{{.TAILSCALE_OAUTH_CLIENT_SECRET}}"
+      TF_VAR_tailscale_auth_nat_key: "{{.TAILSCALE_AUTH_NAT_KEY}}"
       TF_VAR_etcd_s3_bucket: "{{.PROJECT_NAME}}-etcd-{{.CLOUD_ENV}}"
       TF_VAR_etcd_s3_region: "{{.S3_REGION}}"
       TF_VAR_etcd_s3_endpoint: "https://storage.googleapis.com"
@@ -196,9 +195,17 @@ tasks:
     desc: "Write Hetzner Kubeconfig to disk"
     cmds:
       - mkdir -p ~/.kube
-      - terraform -chdir=infra/providers/hetzner output -raw kubeconfig > ~/.kube/config
+      - terraform -chdir=infra/terraform/providers/hetzner output -raw kubeconfig > ~/.kube/config
       - chmod 600 ~/.kube/config
       - echo "✅ Kubeconfig successfully written to ~/.kube/config"
+
+  hz:talosconfig:
+    desc: "Write Hetzner Talosconfig to disk"
+    cmds:
+      - mkdir -p ~/.talos
+      - terraform -chdir=infra/terraform/providers/hetzner output -raw talosconfig > ~/.talos/config
+      - chmod 600 ~/.talos/config
+      - echo "✅ Talosconfig successfully written to ~/.talos/config"
 
   # DIGITALOCEAN INFRASTRUCTURE
   do:plan:

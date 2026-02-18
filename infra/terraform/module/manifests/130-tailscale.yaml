@@ -1,0 +1,11 @@
+oauth:
+  clientId: "${ClientId}"
+  clientSecret: "${ClientSecret}"
+
+# Automatically expose the Kubernetes API server to your Tailnet
+apiServerProxyConfig:
+  mode: "true"
+
+operatorConfig:
+  defaultTags:
+    - "tag:k8s-operator"

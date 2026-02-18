@@ -1,0 +1,27 @@
+controller:
+  kind: DaemonSet
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: "100%"
+
+  terminationGracePeriodSeconds: 10
+
+  extraInitContainers:
+    - name: wait-for-api
+      image: busybox:latest
+      command:
+        [
+          "sh",
+          "-c",
+          "until nc -zv ${K8sServiceHost} 443; do echo waiting for apiserver; sleep 2; done;",
+        ]
+
+  service:
+    type: ClusterIP
+
+  config:
+    use-proxy-protocol: "true"

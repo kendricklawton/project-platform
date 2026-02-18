@@ -1,3 +1,6 @@
+# --- PACKER CONFIGURATION ---
+# This block defines the binary requirements. We're using both Hetzner and DigitalOcean
+# to maintain multi-cloud parity as defined in the 'project-platform' spec.
 packer {
   required_plugins {
     hcloud = {
@@ -11,100 +14,105 @@ packer {
   }
 }
 
-# HCLOUD CONFIG
+# --- VARIABLES ---
+# These variables are injected via the 'task _packer_build' command in Taskfile.yml.
+# We use sensitive = true for tokens to ensure they don't leak in CI/CD logs.
+# Default Version
+variable "image_version" {
+  type    = string
+  default = "v1"
+}
+
+# Hetzner Cloud Config
 variable "hcloud_token" {
   type      = string
   sensitive = true
 }
-variable "hcloud_image" {
-  type = string
-  default = "ubuntu-22.04"
+variable "hcloud_nat_image" {
+  type    = string
 }
-variable "hcloud_server_type" { type = string }
+variable "hcloud_nat_server_type" {
+  type    = string
+}
 
-# DIGITALOCEAN CONFIG
+# DigitalOcean Config
 variable "docloud_token" {
   type      = string
   sensitive = true
 }
-variable "docloud_image" {
-  type = string
+
+variable "docloud_nat_image" {
+  type    = string
   default = "ubuntu-22-04-x64"
 }
-variable "docloud_server_type" { type = string }
 
-# Component Versions
-variable "k3s_version" { type = string }
-variable "gvisor_version" { type = string }
+variable "docloud_nat_server_type" {
+  type    = string
+  default = "s-1vcpu-1gb" # Entry-level compute, sufficient for routing
+}
 
-# --- SOURCES ---
-
-# Hetzner: US East (Ashburn)
-source "hcloud" "k3s_ash" {
-  token         = var.hcloud_token
-  image         = var.hcloud_image
-  location      = "ash"
-  server_type   = var.hcloud_server_type
-  ssh_username  = "root"
-  snapshot_name = "ash-k3s-base-v1"
+# --- SOURCES (Compute Instances) ---
+source "hcloud" "nat_ash" {
+  token           = var.hcloud_token
+  image           = var.hcloud_nat_image
+  location        = "ash"
+  server_type     = var.hcloud_nat_server_type
+  ssh_username    = "root"
+  snapshot_name   = "ash-nat-gateway-${var.image_version}"
   snapshot_labels = {
-    role    = "k3s-base"
-    location  = "ash"
-    version = "v1"
+    role     = "nat-gateway"
+    location = "ash"
+    version  = ${var.image_version}
   }
 }
 
-
-# Hetzner: US West (Hillsboro)
-source "hcloud" "k3s_hil" {
-  token         = var.hcloud_token
-  image         = var.hcloud_image
-  location      = "hil"
-  server_type   = var.hcloud_server_type
-  ssh_username  = "root"
-  snapshot_name = "hil-k3s-base-v1"
+source "hcloud" "nat_hil" {
+  token           = var.hcloud_token
+  image           = var.hcloud_nat_image
+  location        = "hil"
+  server_type     = var.hcloud_nat_server_type
+  ssh_username    = "root"
+  snapshot_name   = "hil-nat-gateway-${var.image_version}"
   snapshot_labels = {
-    role    = "k3s-base"
+    role     = "nat-gateway"
     location  = "hil"
-    version = "v1"
+    version  = ${var.image_version}
   }
 }
 
-# DigitalOcean: US East (New York 3)
-source "digitalocean" "k3s_nyc" {
+source "digitalocean" "nat_nyc" {
   api_token     = var.docloud_token
   region        = "nyc3"
-  size          = var.docloud_server_type
-  image         = var.docloud_image
+  size          = var.docloud_nat_server_type
+  image         = var.docloud_nat_image
   ssh_username  = "root"
-  snapshot_name = "nyc3-k3s-base-v1"
-  tags          = ["k3s-base", "region:nyc", "version:v1"]
+  snapshot_name = "nyc3-nat-gateway-${var.image_version}"
+  tags          = ["nat-gateway", "region:nyc", "version:${var.image_version}"]
 }
 
-# DigitalOcean: US West (San Francisco 3)
-source "digitalocean" "k3s_sfo" {
+source "digitalocean" "nat_sfo" {
   api_token     = var.docloud_token
   region        = "sfo3"
-  size          = var.docloud_server_type
-  image         = var.docloud_image
+  size          = var.docloud_nat_server_type
+  image         = var.docloud_nat_image
   ssh_username  = "root"
-  snapshot_name = "sfo3-k3s-base-v1"
-  tags          = ["k3s-base", "region:sfo", "version:v1"]
+  snapshot_name = "sfo3-nat-gateway-${var.image_version}"
+  tags          = ["nat-gateway", "region:sfo", "version:${var.image_version}"]
 }
 
 # --- BUILD PIPELINE ---
-
 build {
-  name = "k3s"
+  name = "nat-gateway"
 
+  # We pull from multiple sources to build images in parallel across clouds.
+  # Use 'task packer:hz' or 'task packer:do' to target specific ones.
   sources = [
-    "source.hcloud.k3s_ash",
-    "source.hcloud.k3s_hil",
-    "source.digitalocean.k3s_nyc",
-    "source.digitalocean.k3s_sfo"
+    "source.hcloud.nat_ash",
+    "source.digitalocean.nat_nyc"
   ]
 
-  # Wait for Cloud-Init (Critical for DigitalOcean)
+  # Cloud-init can often conflict with apt-get if it's still running updates.
+  # This provisioner ensures the VM is actually ready for our script.
   provisioner "shell" {
     inline = [
       "echo 'Waiting for cloud-init to finish...'",
@@ -112,94 +120,38 @@ build {
     ]
   }
 
-  # 2. Main Installation Script
+  # Main Installation Script
+  # This transforms a generic Ubuntu image into a dedicated Routing/Security Gateway.
   provisioner "shell" {
     inline = [
-      # Set non-interactive mode
       "set -e",
       "export DEBIAN_FRONTEND=noninteractive",
       "apt-get update && apt-get upgrade -y",
 
       # Install Core Utilities
-      # fail2ban: Defense-in-depth against brute force
-      # wireguard: Required for Cilium encryption/peering
-      # open-iscsi/nfs-common: Required for storage drivers
-      "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping jq fail2ban",
+      # - iptables-persistent: Saves NAT rules across reboots
+      # - tailscale: The backbone of our secure private network
+      # - fail2ban: Basic SSH brute-force protection
+      "apt-get install -y ca-certificates curl wget iptables-persistent systemd-timesyncd fping jq fail2ban",
 
-      # Enable System Time Synchronization
+      # Clock sync is vital for Tailscale/Wireguard handshake stability
       "systemctl enable systemd-timesyncd",
       "timedatectl set-ntp true",
 
-      # Install Debugging Aliases
-      "echo \"alias hstat='kubectl get helmcharts -A'\" >> /root/.bashrc",
-      "echo \"alias hdebug='kubectl describe helmchart -n kube-system'\" >> /root/.bashrc",
-      "echo \"alias k='kubectl'\" >> /root/.bashrc",
-
-      # Install gVisor (runsc)
-      "ARCH=$(uname -m)",
-      "URL=https://storage.googleapis.com/gvisor/releases/release/${var.gvisor_version}/$${ARCH}",
-      "wget -q $${URL}/runsc $${URL}/runsc.sha512 || { echo 'Failed to download runsc'; exit 1; }",
-      "sha512sum -c runsc.sha512 || { echo 'Checksum verification failed for runsc'; exit 1; }",
-      "rm -f runsc.sha512",
-      "chmod a+rx runsc",
-      "mv runsc /usr/local/bin",
-      "ln -sf /usr/local/bin/runsc /usr/bin/runsc",
-
-      "wget -q $${URL}/containerd-shim-runsc-v1 $${URL}/containerd-shim-runsc-v1.sha512 || { echo 'Failed to download containerd-shim-runsc-v1'; exit 1; }",
-      "sha512sum -c containerd-shim-runsc-v1.sha512 || { echo 'Checksum verification failed for containerd-shim-runsc-v1'; exit 1; }",
-      "rm -f containerd-shim-runsc-v1.sha512",
-      "chmod a+rx containerd-shim-runsc-v1",
-      "mv containerd-shim-runsc-v1 /usr/local/bin",
-      "ln -sf /usr/local/bin/containerd-shim-runsc-v1 /usr/bin/containerd-shim-runsc-v1",
-
-      # Install Tailscale (Mesh VPN)
+      # Install Tailscale
+      # We clear the state file so each new instance generated from this snapshot
+      # is forced to authenticate as a unique node.
       "curl -fsSL https://tailscale.com/install.sh | sh",
       "systemctl enable tailscaled",
       "rm -f /var/lib/tailscale/tailscaled.state",
 
-      # Pre-download K3s Binary (Binaries only, no start)
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
+      # Enable IPv4 Forwarding
+      # This is the "magic" that allows this VM to act as a bridge for other servers.
+      "sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf",
+      "sysctl -p",
 
-      # DNS Hardening (Force Public DNS, disable systemd stub)
-      # "rm -f /etc/resolv.conf",
-      # "echo 'nameserver 1.1.1.1' > /etc/resolv.conf",
-      # "echo 'nameserver 8.8.8.8' >> /etc/resolv.conf",
-
-      # Configure Systemd Services (Prepare Agent Service)
-      "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
-      "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s agent|g' /etc/systemd/system/k3s-agent.service",
-      "systemctl daemon-reload",
-
-      # Kernel Tuning for Kubernetes
-      "modprobe br_netfilter",
-      "echo 'br_netfilter' > /etc/modules-load.d/k3s.conf",
-
-      "cat >> /etc/sysctl.d/99-k3s.conf <<EOF",
-      "net.ipv4.ip_forward = 1",
-      "net.ipv6.conf.all.forwarding = 1",
-      "net.bridge.bridge-nf-call-iptables = 1",
-      "net.bridge.bridge-nf-call-ip6tables = 1",
-      "fs.inotify.max_user_instances = 8192",
-      "fs.inotify.max_user_watches = 524288",
-      "EOF",
-      "sysctl --system",
-
-      # Log Maintenance
-      "cat > /etc/logrotate.d/k3s-bootstrap <<EOF",
-      "/var/log/tailscale-join.log {",
-      "    size 10M",
-      "    rotate 5",
-      "    compress",
-      "    missingok",
-      "    notifempty",
-      "    copytruncate",
-      "}",
-      "EOF",
-
-      "sed -i 's/#SystemMaxUse=/SystemMaxUse=1G/g' /etc/systemd/journald.conf",
-      "sed -i 's/#SystemKeepFree=/SystemKeepFree=1G/g' /etc/systemd/journald.conf",
-
-      # Security: Fail2Ban
+      # Hardening: Configure Fail2Ban
+      # Since NAT gateways are often edge-facing, we need to punish brute-force SSH attempts.
       "cat > /etc/fail2ban/jail.local <<EOF",
       "[DEFAULT]",
       "bantime = 1h",
@@ -212,21 +164,23 @@ build {
       "EOF",
       "systemctl enable fail2ban",
 
+      # Image Optimization & Cleanup
+      # We want the final snapshot to be as small as possible to save on storage costs.
       "apt-get autoremove -y",
+      "apt-get clean",
+      "rm -rf /var/lib/apt/lists/*",
 
-      # This writes zeros to all free space so compression works effectively
-      "dd if=/dev/zero of=/EMPTY bs=1M || { echo 'Failed to zero out disk space'; exit 1; }",
+      # Zero out the free space to help the cloud provider's compression algorithm.
+      "dd if=/dev/zero of=/EMPTY bs=1M || true",
       "rm -f /EMPTY",
       "sync",
 
+      # Identity Reset
+      # CRITICAL: Ensures every VM spawned from this image gets its own unique Machine ID.
       "cloud-init clean --logs",
       "rm -f /etc/netplan/*.yaml",
       "truncate -s 0 /etc/machine-id",
       "rm -f /var/lib/dbus/machine-id",
-
-      # Cleanup
-      "apt-get clean",
-      "rm -rf /var/lib/apt/lists/*",
       "truncate -s 0 /etc/hostname",
       "sync"
     ]
