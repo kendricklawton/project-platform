@@ -16,6 +16,21 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
 
+      # 1. Force rip down old pods to free host ports 80/443 immediately
+      updateStrategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: "100%"
+
+      # 2. Shorten wait time for Nginx to exit despite LB health check noise
+      terminationGracePeriodSeconds: 10
+
+      # 3. Wait for API and Cilium networking to be ready before starting
+      extraInitContainers:
+        - name: wait-for-api
+          image: busybox:latest
+          command: ['sh', '-c', 'until nc -zv 10.43.0.1 443; do echo waiting for apiserver; sleep 2; done;']
+
       # We do not need a Kubernetes LoadBalancer service because
       # the external Hetzner/DO Load Balancer routes directly to the nodes.
       service:

@@ -225,11 +225,15 @@ resource "hcloud_load_balancer_service" "k3s_http" {
   proxyprotocol    = true
 
   health_check {
-    protocol = "tcp"
-    port     = 80
+    protocol = "http"
+    port     = 10254
     interval = 10
     timeout  = 5
     retries  = 3
+
+    http {
+      path = "/healthz"
+    }
   }
 }
 
@@ -241,11 +245,15 @@ resource "hcloud_load_balancer_service" "k3s_https" {
   proxyprotocol    = true
 
   health_check {
-    protocol = "tcp"
-    port     = 443
+    protocol = "http"
+    port     = 10254
     interval = 10
     timeout  = 5
     retries  = 3
+
+    http {
+      path = "/healthz"
+    }
   }
 }
 
@@ -474,19 +482,25 @@ resource "hcloud_firewall" "cluster_fw" {
     source_ips = ["${local.k3s_api_lb_ip}/32"]
   }
 
-  # REFACTOR: Dynamic Ingress LB isolation
+  # Dynamic Ingress LB isolation
   rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "80"
-    source_ips = ["${hcloud_load_balancer_network.k3s_ingress_net.ip}/32"]
+    direction = "in"
+    protocol  = "tcp"
+    port      = "80"
+    source_ips = [
+      "${hcloud_load_balancer_network.k3s_ingress_net.ip}/32", # Ingress LB
+      "10.0.0.0/16"                                            # Internal Probes
+    ]
   }
 
   rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "443"
-    source_ips = ["${hcloud_load_balancer_network.k3s_ingress_net.ip}/32"]
+    direction = "in"
+    protocol  = "tcp"
+    port      = "443"
+    source_ips = [
+      "${hcloud_load_balancer_network.k3s_ingress_net.ip}/32", # Ingress LB
+      "10.0.0.0/16"                                            # Internal Probes
+    ]
   }
 
   # MESH VPN: WireGuard traffic
@@ -509,6 +523,13 @@ resource "hcloud_firewall" "cluster_fw" {
     direction  = "in"
     protocol   = "udp"
     port       = "any"
+    source_ips = ["10.0.0.0/16"]
+  }
+
+  rule {
+    direction  = "in"
+    protocol   = "tcp"
+    port       = "10254"
     source_ips = ["10.0.0.0/16"]
   }
 
