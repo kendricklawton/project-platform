@@ -39,6 +39,8 @@ variable "vpc_cidr" {
   default     = "10.10.0.0/16"
 }
 
+variable "nat_type" { type = string }
+
 variable "master_type" { type = string }
 variable "worker_type" { type = string }
 variable "load_balancer_type" { type = string }
@@ -48,6 +50,7 @@ variable "project_name" { type = string }
 variable "cloud_env" { type = string }
 
 variable "ssh_key_name" { type = string }
+
 variable "talos_image_name" {
   type    = string
   default = "talos-hcloud"
@@ -163,6 +166,11 @@ data "talos_machine_configuration" "worker" {
 }
 
 # DATA SOURCES
+data "hcloud_image" "nat" {
+  with_selector = "role=nat-gateway,location=${var.location}"
+  most_recent   = true
+}
+
 data "hcloud_image" "talos" {
   with_selector = "role=talos-base,location=${var.location}"
   most_recent   = true
@@ -189,7 +197,7 @@ resource "hcloud_network_subnet" "k8s_nodes" {
 resource "hcloud_server" "nat" {
   name        = "${local.prefix}-nat"
   image       = data.hcloud_image.nat.id # Your pre-built Packer image!
-  server_type = "cpx11"
+  server_type = var.nat_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
 
@@ -341,7 +349,7 @@ resource "hcloud_server" "cp_init" {
   server_type = var.master_type
   location    = var.location
 
-  user_data = data.talos_machine_configuration.controlplane.machine_config
+  user_data = data.talos_machine_configuration.controlplane.machine_configuration
 
   public_net {
     ipv4_enabled = false
@@ -371,7 +379,7 @@ resource "hcloud_server" "cp_join" {
   server_type = var.master_type
   location    = var.location
 
-  user_data = data.talos_machine_configuration.controlplane.machine_config
+  user_data = data.talos_machine_configuration.controlplane.machine_configuration
 
   public_net {
     ipv4_enabled = false
@@ -430,7 +438,7 @@ resource "hcloud_server" "worker" {
   server_type = var.worker_type
   location    = var.location
 
-  user_data = data.talos_machine_configuration.worker.machine_config
+  user_data = data.talos_machine_configuration.worker.machine_configuration
 
   public_net {
     ipv4_enabled = false

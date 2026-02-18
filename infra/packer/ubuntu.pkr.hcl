@@ -28,10 +28,10 @@ variable "hcloud_token" {
   type      = string
   sensitive = true
 }
-variable "hcloud_nat_image" {
+variable "hcloud_server_type" {
   type    = string
 }
-variable "hcloud_nat_server_type" {
+variable "hcloud_ubuntu_version" {
   type    = string
 }
 
@@ -40,23 +40,19 @@ variable "docloud_token" {
   type      = string
   sensitive = true
 }
-
-variable "docloud_nat_image" {
+variable "docloud_server_type" {
   type    = string
-  default = "ubuntu-22-04-x64"
 }
-
-variable "docloud_nat_server_type" {
+variable "docloud_ubuntu_version" {
   type    = string
-  default = "s-1vcpu-1gb" # Entry-level compute, sufficient for routing
 }
 
 # --- SOURCES (Compute Instances) ---
 source "hcloud" "nat_ash" {
   token           = var.hcloud_token
-  image           = var.hcloud_nat_image
+  image           = var.hcloud_ubuntu_version
   location        = "ash"
-  server_type     = var.hcloud_nat_server_type
+  server_type     = var.hcloud_server_type
   ssh_username    = "root"
   snapshot_name   = "ash-nat-gateway-${var.image_version}"
   snapshot_labels = {
@@ -68,9 +64,9 @@ source "hcloud" "nat_ash" {
 
 source "hcloud" "nat_hil" {
   token           = var.hcloud_token
-  image           = var.hcloud_nat_image
+  image           = var.hcloud_ubuntu_version
   location        = "hil"
-  server_type     = var.hcloud_nat_server_type
+  server_type     = var.hcloud_server_type
   ssh_username    = "root"
   snapshot_name   = "hil-nat-gateway-${var.image_version}"
   snapshot_labels = {
@@ -83,8 +79,8 @@ source "hcloud" "nat_hil" {
 source "digitalocean" "nat_nyc" {
   api_token     = var.docloud_token
   region        = "nyc3"
-  size          = var.docloud_nat_server_type
-  image         = var.docloud_nat_image
+  size          = var.docloud_server_type
+  image         = var.docloud_ubuntu_version
   ssh_username  = "root"
   snapshot_name = "nyc3-nat-gateway-${var.image_version}"
   tags          = ["nat-gateway", "region:nyc", "version:${var.image_version}"]
@@ -93,8 +89,8 @@ source "digitalocean" "nat_nyc" {
 source "digitalocean" "nat_sfo" {
   api_token     = var.docloud_token
   region        = "sfo3"
-  size          = var.docloud_nat_server_type
-  image         = var.docloud_nat_image
+  size          = var.docloud_server_type
+  image         = var.docloud_ubuntu_version
   ssh_username  = "root"
   snapshot_name = "sfo3-nat-gateway-${var.image_version}"
   tags          = ["nat-gateway", "region:sfo", "version:${var.image_version}"]
