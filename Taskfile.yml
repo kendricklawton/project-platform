@@ -4,16 +4,16 @@ dotenv: [".env"]
 
 vars:
   PROJECT_NAME: "project-platform"
+
   # PACKER CONFIG
   PACKER_DIR: "infra/packer"
-  PACKER_IMAGE: "ubuntu-22-04-x64"
 
   # Packer & Terraform Variables - DigitalOcean
   DOCLOUD_UBUNTU_VERSION: "ubuntu-22-04-x64"
   DOCLOUD_NAT_TYPE: "s-1vcpu-1gb"
   DOCLOUD_MASTER_TYPE: "s-4vcpu-8gb"
   DOCLOUD_WORKER_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_K8S_TYPE: "s-4vcpu-8gb"
+  DOCLOUD_K3S_TYPE: "s-4vcpu-8gb"
   DOCLOUD_LB_TYPE: "s-4vcpu-8gb"
 
   # Packer & Terraform Variables - Hetzner
@@ -21,7 +21,7 @@ vars:
   HCLOUD_NAT_TYPE: "cpx11"
   HCLOUD_MASTER_TYPE: "cpx31"
   HCLOUD_WORKER_TYPE: "cpx31"
-  HCLOUD_K8S_TYPE: "cpx31"
+  HCLOUD_K3S_TYPE: "cpx31"
   HCLOUD_LB_TYPE: "lb11"
 
   # COMPONENT VERSIONS
@@ -49,29 +49,11 @@ vars:
   DATABASE_URL: "{{.DATABASE_URL}}"
 
 tasks:
-  # GCP SECRET MANAGEMENT (Manual Seeding)
-  # Usage: task gcp:secret:set NAME=registry-s3-key VALUE=your-actual-key
-  gcp:secret:set:
-    desc: "Push a secret value to GCP Secret Manager"
-    cmds:
-      - |
-        if ! gcloud secrets list --filter="name:{{.NAME}}" --project {{.GCP_PROJECT_ID}} | grep -q {{.NAME}}; then
-          gcloud secrets create {{.NAME}} --replication-policy="automatic" --project {{.GCP_PROJECT_ID}}
-        fi
-      - echo -n "{{.VALUE}}" | gcloud secrets versions add {{.NAME}} --data-file=- --project {{.GCP_PROJECT_ID}}
-    requires:
-      vars: [NAME, VALUE]
-
-  gcp:secret:list:
-    desc: "List all platform secrets in GCP"
-    cmds:
-      - gcloud secrets list --project {{.GCP_PROJECT_ID}}
-
   # PACKER WORKFLOWS
-  _packer_build_nat:
+  _packer_build:
     internal: true
     silent: true
-    desc: "Generic Packer Build Wrapper for Ubuntu NAT Gateway"
+    desc: "Generic Packer Build Wrapper for Ubuntu"
     env:
       PKR_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
       PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
@@ -80,51 +62,24 @@ tasks:
       - >-
         packer build {{.BUILD_ARGS}}
         -var "docloud_ubuntu_version={{.DOCLOUD_UBUNTU_VERSION}}"
-        -var "docloud_server_type={{.DOCLOUD_NAT_TYPE}}"
         -var "hcloud_ubuntu_version={{.HCLOUD_UBUNTU_VERSION}}"
-        -var "hcloud_server_type={{.HCLOUD_NAT_TYPE}}"
-        {{.PACKER_DIR}}/ubuntu.pkr.hcl
+        -var "gvisor_version={{.GVISOR_VERSION}}"
+        -var "k3s_version={{.K3S_VERSION}}"
+        {{.PACKER_DIR}}
 
-  _packer_build_k8s:
-    internal: true
-    silent: true
-    desc: "Generic Packer Build Wrapper for Talos K8s Cluster"
-    env:
-      PKR_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
-      PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
+  # Packer Hetzner Cloud
+  packer:hz:
+    desc: "Build Hetzner Cloud Infrastructure"
     cmds:
-      - packer init {{.PACKER_DIR}}
-      - >-
-        packer build {{.BUILD_ARGS}}
-        -var "docloud_k8s_image={{.DOCLOUD_K8S_IMAGE}}"
-        -var "docloud_k8s_type={{.DOCLOUD_K8S_TYPE}}"
-        -var "hcloud_k8s_image={{.HCLOUD_K8S_IMAGE}}"
-        -var "hcloud_k8s_type={{.HCLOUD_K8S_TYPE}}"
-        {{.PACKER_DIR}}/talos.pkr.hcl
-
-  packer:hz:nat:
-    desc: "Build Hetzner Images Only"
-    cmds:
-      - task: _packer_build_nat
+      - task: _packer_build
         vars: { BUILD_ARGS: "-only=*.hcloud.*" }
 
-  packer:hz:k8s:
-    desc: "Build Hetzner Talos Base Image"
+  # Packer DigitalOcean
+  packer:do:
+    desc: "Build Hetzner Cloud Infrastructure"
     cmds:
-      - task: _packer_build_k8s
+      - task: _packer_build
         vars: { BUILD_ARGS: "-only=*.hcloud.*" }
-
-  packer:do:nat:
-    desc: "Build DigitalOcean Images Only"
-    cmds:
-      - task: _packer_build_nat
-        vars: { BUILD_ARGS: "-only=*.digitalocean.*" }
-
-  packer:do:k8s:
-    desc: "Build DigitalOcean Talos Base Image"
-    cmds:
-      - task: _packer_build_k8s
-        vars: { BUILD_ARGS: "-only=*.digitalocean.*" }
 
   # TERRAFORM CORE ENGINE
   _tf:
@@ -140,19 +95,20 @@ tasks:
       HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
 
       # TF_VAR Data
+      TF_VAR_project_name: "{{.PROJECT_NAME}}"
       TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
       TF_VAR_nat_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_NAT_TYPE}}{{else}}{{.DOCLOUD_NAT_TYPE}}{{end}}'
       TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_MASTER_TYPE}}{{else}}{{.DOCLOUD_MASTER_TYPE}}{{end}}'
       TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_WORKER_TYPE}}{{else}}{{.DOCLOUD_WORKER_TYPE}}{{end}}'
       TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}{{.DOCLOUD_LB_TYPE}}{{end}}'
       TF_VAR_location: "{{.LOCATION}}"
-      TF_VAR_project_name: "{{.PROJECT_NAME}}"
+
       TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
       TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
       TF_VAR_github_repo_url: "{{.GITHUB_REPO_URL}}"
-      TF_VAR_tailscale_oauth_client_id: "{{.TAILSCALE_OAUTH_CLIENT_ID}}"
-      TF_VAR_tailscale_oauth_client_secret: "{{.TAILSCALE_OAUTH_CLIENT_SECRET}}"
       TF_VAR_tailscale_auth_nat_key: "{{.TAILSCALE_AUTH_NAT_KEY}}"
+      TF_VAR_tailscale_auth_k3s_server_key: "{{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
+      TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_AGENT_KEY}}"
       TF_VAR_etcd_s3_bucket: "{{.PROJECT_NAME}}-etcd-{{.CLOUD_ENV}}"
       TF_VAR_etcd_s3_region: "{{.S3_REGION}}"
       TF_VAR_etcd_s3_endpoint: "https://storage.googleapis.com"
@@ -223,14 +179,6 @@ tasks:
       - chmod 600 ~/.kube/config
       - echo "✅ Kubeconfig successfully written to ~/.kube/config"
 
-  hz:talosconfig:
-    desc: "Write Hetzner Talosconfig to disk"
-    cmds:
-      - mkdir -p ~/.talos
-      - terraform -chdir=infra/terraform/providers/hetzner output -raw talosconfig > ~/.talos/config
-      - chmod 600 ~/.talos/config
-      - echo "✅ Talosconfig successfully written to ~/.talos/config"
-
   # DIGITALOCEAN INFRASTRUCTURE
   do:plan:
     desc: "Plan DigitalOcean NYC3 (Dev)"
@@ -276,6 +224,14 @@ tasks:
           CMD: "output"
           ARGS: ""
 
+  do:kubeconfig:
+    desc: "Write DigitalOcean Kubeconfig to disk"
+    cmds:
+      - mkdir -p ~/.kube
+      - terraform -chdir=infra/terraform/providers/digitalocean output -raw kubeconfig > ~/.kube/config
+      - chmod 600 ~/.kube/config
+      - echo "✅ Kubeconfig successfully written to ~/.kube/config"
+
   # BUILD WORKFLOWS (Choice of ko or Docker)
   build:ko:api:
     desc: "Build the API container image using ko (Go-optimized)"
@@ -304,13 +260,6 @@ tasks:
     dir: core
     cmds:
       - docker build -t project-platform-cli:latest --build-arg SERVICE_NAME=platform-cli .
-
-  # WEB APP WORKFLOWS
-  web:dev:
-    desc: "Show Web App"
-    dir: web
-    cmds:
-      - npm run dev
 
   # DATABASE WORKFLOWS
   db:up:
@@ -361,3 +310,10 @@ tasks:
     desc: "Login to the local PostgreSQL database"
     cmds:
       - docker exec -it project-platform-db-1 psql -U platform platform_db
+
+  # WEB APP WORKFLOWS
+  web:dev:
+    desc: "Show Web App"
+    dir: web
+    cmds:
+      - npm run dev

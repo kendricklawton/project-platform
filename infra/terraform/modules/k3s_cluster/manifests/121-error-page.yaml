@@ -1,0 +1,69 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: platform-error-pages
+  namespace: ingress-nginx
+data:
+  404.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>404 | Project Platform</title>
+        <style>
+            body { background: #0a0a0a; color: #fff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .container { text-align: center; border: 1px solid #333; padding: 3rem; border-radius: 8px; }
+            h1 { color: #00ff88; font-size: 3rem; margin-bottom: 0; }
+            p { color: #888; margin-top: 1rem; }
+            .brand { font-weight: bold; letter-spacing: 1px; color: #555; text-transform: uppercase; margin-top: 2rem; font-size: 0.8rem; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>404</h1>
+            <p>The deployment or route you are looking for does not exist.</p>
+            <div class="brand">Project Platform</div>
+        </div>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: custom-error-pages
+  namespace: ingress-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: custom-error-pages
+  template:
+    metadata:
+      labels:
+        app: custom-error-pages
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: html
+          configMap:
+            name: platform-error-pages
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: custom-error-pages
+  namespace: ingress-nginx
+spec:
+  selector:
+    app: custom-error-pages
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

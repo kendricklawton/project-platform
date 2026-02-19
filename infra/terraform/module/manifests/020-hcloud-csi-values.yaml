@@ -1,2 +1,0 @@
-node:
-  kubeletDir: "/var/lib/kubelet"

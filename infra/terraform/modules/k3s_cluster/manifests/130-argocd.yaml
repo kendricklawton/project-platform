@@ -1,0 +1,45 @@
+# Core GitOps Engine
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  chart: argo-cd
+  repo: https://argoproj.github.io/argo-helm
+  targetNamespace: argocd
+  createNamespace: true
+  version: "${ArgoVersion}"
+  bootstrap: true
+  valuesContent: |-
+    # 1. Run "Skinny" (High Availability Disabled)
+    redis-ha:
+      enabled: false
+    controller:
+      replicas: 1
+    repoServer:
+      replicas: 1
+    applicationSet:
+      replicas: 1
+    server:
+      replicas: 1
+      # 2. Disable internal TLS (Let Nginx handle it)
+      extraArgs:
+        - --insecure
+      # 3. Expose via Ingress
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          cert-manager.io/cluster-issuer: "letsencrypt-${CloudEnv}"
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+        hosts:
+          - "${ArgoHost}"
+        tls:
+          - secretName: argocd-tls
+            hosts:
+              - "${ArgoHost}"
+      # 4. Persistence (Save config if pod restarts)
+      volumeMounts:
+        - mountPath: /app/config
+          name: argocd-cmd-params-cm-mount
