@@ -12,7 +12,7 @@ write_files:
         ethernets:
           enp7s0:
             dhcp4: true
-            dhcp6: true  # Or false, but they must be consistent in overrides
+            dhcp6: true
 
   # K3S REGISTRIES CONFIG
   - path: /etc/rancher/k3s/registries.yaml
@@ -155,8 +155,8 @@ write_files:
       # -------------------------------------
 
       cat > /etc/rancher/k3s/config.yaml <<EOF
-      server: https://${k3s_url}
-      token: ${k3s_token}
+      server: https://${url}
+      token: ${token}
       node-ip: $PRIVATE_IP
 
       kubelet-arg:

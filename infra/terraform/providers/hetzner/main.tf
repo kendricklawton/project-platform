@@ -75,16 +75,14 @@ data "hcloud_ssh_key" "admin" {
 
 # SHARED BRAIN (MANIFESTS)
 module "manifests" {
-  source = "../../modules/k3s_cluster"
-
+  source            = "../../modules/k3s_cluster"
+  project_name      = var.project_name
   cloud_provider    = var.cloud_provider
   cloud_env         = var.cloud_env
-  project_name      = var.project_name
-  operator_replicas = local.cluster_env.operator_replicas
-  # vpc_cidr          = var.vpc_cidr
   private_interface = var.private_interface
-
-  # network_mtu       = var.network_mtu
+  operator_replicas = local.cluster_env.operator_replicas
+  vpc_cidr          = var.vpc_cidr
+  network_mtu       = var.network_mtu
 
   api_ip  = local.ip_cp_init
   network = hcloud_network.main.name
@@ -115,9 +113,10 @@ module "config_cp_init" {
 
   cloud_provider = var.cloud_provider
 
-  k3s_api_lb_ip      = local.ip_api_lb
-  k3s_token          = random_password.token.result
-  k3s_init           = true
+  ip_api_lb = local.ip_api_lb
+
+  token              = random_password.token.result
+  init               = true
   tailscale_auth_key = var.tailscale_auth_k3s_server_key
   network_gateway    = var.network_gateway
 
@@ -179,10 +178,10 @@ module "config_k3s_cp_join" {
   cloud_provider  = var.cloud_provider
   network_gateway = var.network_gateway
 
-  k3s_api_lb_ip      = local.ip_api_lb
-  k3s_ingress_lb_ip  = local.ip_ingress_lb
-  k3s_token          = random_password.token.result
-  k3s_init           = false
+  ip_api_lb          = local.ip_api_lb
+  ip_ingress_lb      = local.ip_ingress_lb
+  token              = random_password.token.result
+  init               = false
   tailscale_auth_key = var.tailscale_auth_k3s_server_key
   etcd_s3_access_key = var.etcd_s3_access_key
   etcd_s3_secret_key = var.etcd_s3_secret_key
@@ -227,15 +226,14 @@ resource "hcloud_load_balancer_target" "api_targets_join" {
 
 # WORKER AGENTS
 module "config_k3s_agent" {
-  source = "../../modules/k3s_node"
-  count  = local.cluster_env.worker_count
-
+  source             = "../../modules/k3s_node"
+  count              = local.cluster_env.worker_count
   hostname           = format("${local.prefix}-k3s-ag-%02d", count.index + 1)
   cloud_env          = var.cloud_env
   node_role          = "agent"
   cloud_provider     = var.cloud_provider
-  k3s_api_lb_ip      = local.ip_api_lb
-  k3s_token          = random_password.token.result
+  ip_api_lb          = local.ip_api_lb
+  token              = random_password.token.result
   tailscale_auth_key = var.tailscale_auth_k3s_agent_key
 }
 

@@ -15,6 +15,12 @@ variable "vpc_cidr" {
   default     = "10.10.0.0/16"
 }
 
+variable "network_mtu" {
+  description = "The Maximum Transmission Unit (MTU) for the Hetzner VPC"
+  type        = number
+  default     = 1450
+}
+
 variable "network_gateway" {
   description = "The internal IP of the NAT gateway (e.g. 10.10.1.2)"
   default     = "10.10.1.2"
@@ -53,7 +59,8 @@ variable "ingress_nginx_version" { type = string }
 variable "argocd_version" { type = string }
 
 variable "private_interface" {
-  type = string
+  type    = string
+  default = "enp7s0"
 }
 
 variable "tailscale_auth_nat_key" {

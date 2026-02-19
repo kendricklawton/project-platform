@@ -12,7 +12,7 @@ write_files:
         ethernets:
           enp7s0:
             dhcp4: true
-            dhcp6: true  # Or false, but they must be consistent in overrides
+            dhcp6: true
 
   # K3S REGISTRIES CONFIG
   - path: /etc/rancher/k3s/registries.yaml
@@ -181,7 +181,7 @@ write_files:
       fi
 
       cat > /etc/rancher/k3s/config.yaml <<EOF
-      token: ${k3s_token}
+      token: ${token}
       node-ip: $PRIVATE_IP
 
       # --- SECURITY: ENCRYPT SECRETS AT REST ---
@@ -190,7 +190,7 @@ write_files:
       tls-san:
         - ${hostname}
         - $TS_IP
-        - ${k3s_load_balancer_ip}
+        - ${load_balancer_ip}
       flannel-backend: none
       disable-network-policy: true
       disable-kube-proxy: true
@@ -216,7 +216,7 @@ write_files:
         - "provider-id=$PROVIDER_ID"
         - "container-log-max-files=3"
         - "container-log-max-size=10Mi"
-      ${k3s_cluster_setting}
+      ${cluster_setting}
       EOF
 
       echo "--- [Bootstrap] Starting K3s Service ---"
@@ -243,13 +243,6 @@ runcmd:
   - netplan generate
   - netplan apply
   - sleep 5
-
-  # - |
-  #   echo "Cloud Provider: ${cloud_provider}"
-  #   if [ "${cloud_provider}" = "hetzner" ] && [ -n "${network_gateway}" ]; then
-  #     echo "Adding Hetzner default gateway..."
-  #     ip route add default via ${network_gateway} dev enp7s0
-  #   fi
 
   # Time Sync
   - systemctl enable systemd-timesyncd

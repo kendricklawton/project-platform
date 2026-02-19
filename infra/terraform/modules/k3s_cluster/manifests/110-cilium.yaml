@@ -17,10 +17,10 @@ spec:
     # --- HETZNER VPC ROUTING ---
     tunnel: disabled
     routingMode: native
-    ipv4NativeRoutingCIDR: ${VpcCidr}      # <-- Dynamic from Terraform
-    devices: ${PrivateInterface}           # <-- Dynamic (e.g., eth0 or enp7s0)
+    ipv4NativeRoutingCIDR: ${VpcCidr}
+    devices: ${PrivateInterface}
     autoDirectNodeRoutes: true
-    mtu: ${NetworkMtu}                     # <-- Dynamic (1450 for Cloud, 1500 for Bare Metal)
+    mtu: ${NetworkMtu}
 
     bpf:
       masquerade: true
@@ -29,7 +29,7 @@ spec:
       mode: kubernetes
 
     operator:
-      replicas: ${OperatorReplicas}        # <-- Dynamic (1 for dev, 2 for prod)
+      replicas: ${OperatorReplicas}
 
     hubble:
       enabled: true
@@ -38,7 +38,6 @@ spec:
       ui:
         enabled: false
 
-    # ... (Probes and resources can stay hardcoded for now until you need to tune them) ...
     livenessProbe:
       enabled: true
       timeoutSeconds: 30
