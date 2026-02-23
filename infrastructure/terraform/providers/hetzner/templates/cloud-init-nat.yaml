@@ -1,0 +1,115 @@
+#cloud-config
+hostname: ${hostname}
+manage_etc_hosts: true
+
+# Prevent apt from asking interactive questions
+debconf_selections: |
+  iptables-persistent iptables-persistent/autosave_v4 boolean true
+  iptables-persistent iptables-persistent/autosave_v6 boolean true
+
+packages:
+  - iptables-persistent
+  - curl
+  - jq
+  - fail2ban
+
+package_update: true
+package_upgrade: true
+
+write_files:
+  # Private network interface — DHCP but don't steal the default route
+  - path: /etc/netplan/60-private-net.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp7s0:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: false
+
+  # Persist IP forwarding
+  - path: /etc/sysctl.d/99-ip-forward.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward=1
+
+  # iptables rules loaded by netfilter-persistent on boot
+  - path: /etc/iptables/rules.v4
+    permissions: "0600"
+    content: |
+      *filter
+      :INPUT ACCEPT [0:0]
+      :FORWARD ACCEPT [0:0]
+      :OUTPUT ACCEPT [0:0]
+      # Allow established/related inbound
+      -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+      # Allow loopback
+      -A INPUT -i lo -j ACCEPT
+      # Allow Tailscale UDP (direct connections)
+      -A INPUT -p udp --dport 41641 -j ACCEPT
+      # Allow all traffic from private network
+      -A INPUT -s 10.0.0.0/16 -j ACCEPT
+      # Drop everything else inbound (no public SSH)
+      -A INPUT -j DROP
+      # Allow forwarding between interfaces
+      -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+      -A FORWARD -s 10.0.0.0/16 -j ACCEPT
+      COMMIT
+      *nat
+      :PREROUTING ACCEPT [0:0]
+      :INPUT ACCEPT [0:0]
+      :OUTPUT ACCEPT [0:0]
+      :POSTROUTING ACCEPT [0:0]
+      COMMIT
+
+runcmd:
+  # 1. Apply sysctl immediately (don't wait for reboot)
+  - sysctl -p /etc/sysctl.d/99-ip-forward.conf
+
+  # 2. Apply private network netplan
+  - netplan generate
+  - netplan apply
+  - sleep 5
+
+  # 3. Detect WAN interface and write the MASQUERADE rule now that we know it
+  - |
+    WAN_IFACE=$(ip route show default | awk '{print $5}' | head -n1)
+    [ -z "$WAN_IFACE" ] && WAN_IFACE="eth0"
+    echo "WAN interface: $WAN_IFACE" >> /var/log/nat-setup.log
+    # Inject MASQUERADE into the rules file we wrote above
+    sed -i "s|:POSTROUTING ACCEPT \[0:0\]|:POSTROUTING ACCEPT [0:0]\n-A POSTROUTING -o $WAN_IFACE -j MASQUERADE|" /etc/iptables/rules.v4
+    iptables-restore < /etc/iptables/rules.v4
+    netfilter-persistent save
+
+  # 4. Enable and start fail2ban
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+
+  # 5. Install Tailscale
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - systemctl enable tailscaled
+  - systemctl start tailscaled
+
+  # 6. Wait for tailscaled to be ready, then join
+  - |
+    echo "Waiting for tailscaled socket..." >> /var/log/tailscale-join.log
+    for i in $(seq 1 12); do
+      [ -S /run/tailscale/tailscaled.sock ] && break
+      sleep 5
+    done
+    echo "tailscaled socket ready, joining..." >> /var/log/tailscale-join.log
+  - |
+    NEXT_WAIT=0
+    until tailscale up \
+      --authkey=${tailscale_auth_nat_key} \
+      --ssh \
+      --hostname=${hostname} \
+      --advertise-tags="tag:nat" \
+      --reset >> /var/log/tailscale-join.log 2>&1 \
+      || [ $NEXT_WAIT -eq 12 ]; do
+      sleep 5
+      NEXT_WAIT=$((NEXT_WAIT+1))
+    done
+    echo "Tailscale join finished with exit $?" >> /var/log/tailscale-join.log

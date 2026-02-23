@@ -1,0 +1,16 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: ${ArgoCDVersion}
+  targetNamespace: argocd
+  createNamespace: true
+  valuesContent: |-
+    server:
+      # We run insecure internally because your ingress-nginx will handle the TLS termination
+      extraArgs:
+        - --insecure

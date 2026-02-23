@@ -1,0 +1,125 @@
+#cloud-config
+hostname: ${hostname}
+manage_etc_hosts: true
+
+write_files:
+  - path: /opt/bootstrap/inject-manifests.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      mkdir -p /var/lib/rancher/k3s/server/manifests
+      ${manifest_injector_script}
+
+  - path: /etc/netplan/60-private-net.yaml
+    permissions: "0600"
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp7s0:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: false
+
+  - path: /etc/rancher/k3s/registries.yaml
+    permissions: "0644"
+    content: |
+      mirrors:
+        "registry.platform-system:5000":
+          endpoint:
+            - "http://10.43.0.50:5000"
+
+  - path: /var/lib/rancher/k3s/server/audit.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: audit.k8s.io/v1
+      kind: Policy
+      rules:
+      - level: Metadata
+
+  - path: /usr/local/bin/k3s-start.sh
+    permissions: "0700"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -e
+
+      echo "[Bootstrap] Starting Tailscale Join Loop..."
+      for i in {1..30}; do
+        if ping -c 1 8.8.8.8 >/dev/null 2>&1; then break; fi
+        sleep 2
+      done
+
+      echo "[Bootstrap] Fetching HCloud Server ID..."
+      for i in {1..10}; do
+        HCLOUD_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id)
+        if [ -n "$HCLOUD_ID" ]; then break; fi
+        sleep 2
+      done
+
+      if [ -z "$HCLOUD_ID" ]; then
+        echo "CRITICAL: Could not fetch HCloud Server ID"
+        exit 1
+      fi
+
+      for i in {1..30}; do
+        TS_IP=$(tailscale ip -4 2>/dev/null)
+        if [ -n "$TS_IP" ]; then break; fi
+        sleep 2
+      done
+
+      mkdir -p /etc/rancher/k3s
+
+      cat > /etc/rancher/k3s/config.yaml <<EOF
+      token: ${k3s_token}
+      node-ip: $(hostname -I | awk '{print $1}')
+      node-external-ip: $TS_IP
+      tls-san:
+        - ${hostname}
+        - $TS_IP
+        - ${k3s_load_balancer_ip}
+      flannel-backend: none
+      disable-network-policy: true
+      disable:
+        - traefik
+        - servicelb
+        - cloud-controller
+      disable-cloud-controller: true
+      etcd-s3: true
+      etcd-s3-endpoint: ${etcd_s3_endpoint}
+      etcd-s3-access-key: ${etcd_s3_access_key}
+      etcd-s3-secret-key: ${etcd_s3_secret_key}
+      etcd-s3-bucket: ${etcd_s3_bucket}
+      etcd-snapshot-schedule-cron: "0 */6 * * *"
+      etcd-snapshot-retention: 10
+      kubelet-arg:
+        - "cloud-provider=external"
+        - "provider-id=hcloud://$HCLOUD_ID"
+        - "container-log-max-files=3"
+        - "container-log-max-size=10Mi"
+      ${k3s_cluster_setting}
+      EOF
+
+      systemctl stop k3s
+      fuser -k 10258/tcp || true
+      systemctl enable k3s
+      systemctl restart k3s
+
+      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+      for i in {1..60}; do
+        if kubectl get node ${hostname} >/dev/null 2>&1; then break; fi
+        sleep 2
+      done
+
+runcmd:
+  - netplan generate
+  - netplan apply
+  - sleep 5
+  - ip route add default via ${network_gateway} dev enp7s0
+  - |
+    NEXT_WAIT_TIME=0
+    until tailscale up --authkey=${tailscale_auth_k3s_server_key} --ssh --hostname=${hostname} --advertise-tags="tag:k3s-server" --reset >> /var/log/tailscale-join.log 2>&1 || [ $NEXT_WAIT_TIME -eq 12 ];
+    do sleep 5; NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1)); done
+  - /opt/bootstrap/inject-manifests.sh
+  - /usr/local/bin/k3s-start.sh

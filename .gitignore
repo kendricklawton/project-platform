@@ -93,3 +93,8 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
+
+PLATFORM.md
+
+# PACKER WORKFLOWS
+infra/packer/.plugins

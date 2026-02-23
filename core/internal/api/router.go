@@ -38,13 +38,13 @@ func (handler *Handler) Routes() chi.Router {
 
 		v1.Group(func(route chi.Router) {
 			route.Use(handler.RequireAuth)
-			route.Post("/projects", handler.CreateProject)
-			route.Post("/deployments", handler.CreateDeployment)
+			// route.Post("/projects", handler.CreateProject)
+			// route.Post("/deployments", handler.CreateDeployment)
 		})
 
 		// ADMIN ROUTES
 		v1.Route("/admin", func(route chi.Router) {
-			route.Get("/status", handler.GetSystemStatus)
+			// route.Get("/status", handler.GetSystemStatus)
 		})
 	})
 

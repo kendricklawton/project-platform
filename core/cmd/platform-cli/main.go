@@ -1,10 +1,7 @@
 package main
 
-import (
-	"github.com/kendricklawton/project-platform/core/internal/cli"
-	_ "github.com/kendricklawton/project-platform/core/internal/cli/cmds"
-)
+import "fmt"
 
 func main() {
-	cli.Execute()
+	fmt.Println("🚀 Project Platform CLI v0.1.0")
 }

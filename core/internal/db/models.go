@@ -11,41 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
-type Deployment struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	Image     string    `json:"image"`
-	Replicas  int32     `json:"replicas"`
-	Status    string    `json:"status"`
-	Url       string    `json:"url"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type Project struct {
+type Team struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
-	Region    string    `json:"region"`
+	Slug      string    `json:"slug"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type ProjectMember struct {
-	ID        uuid.UUID `json:"id"`
-	ProjectID uuid.UUID `json:"project_id"`
+type TeamMember struct {
+	TeamID    uuid.UUID `json:"team_id"`
 	UserID    uuid.UUID `json:"user_id"`
 	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
-}
-
-type ProjectUsage struct {
-	ID             uuid.UUID `json:"id"`
-	ProjectID      uuid.UUID `json:"project_id"`
-	BillingPeriod  string    `json:"billing_period"`
-	ComputeSeconds int64     `json:"compute_seconds"`
-	BandwidthBytes int64     `json:"bandwidth_bytes"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type User struct {

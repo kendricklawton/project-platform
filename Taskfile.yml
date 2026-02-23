@@ -6,27 +6,18 @@ vars:
   PROJECT_NAME: "project-platform"
 
   # PACKER CONFIG
-  PACKER_DIR: "infra/packer"
-
-  # Packer & Terraform Variables - DigitalOcean
-  DOCLOUD_UBUNTU_VERSION: "ubuntu-22-04-x64"
-  DOCLOUD_NAT_TYPE: "s-1vcpu-1gb"
-  DOCLOUD_MASTER_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_WORKER_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_K3S_TYPE: "s-4vcpu-8gb"
-  DOCLOUD_LB_TYPE: "s-4vcpu-8gb"
+  PACKER_DIR: "infrastructure/packer"
 
   # Packer & Terraform Variables - Hetzner
   HCLOUD_UBUNTU_VERSION: "ubuntu-22.04"
-  HCLOUD_NAT_TYPE: "cpx11"
-  HCLOUD_MASTER_TYPE: "cpx31"
-  HCLOUD_WORKER_TYPE: "cpx31"
   HCLOUD_K3S_TYPE: "cpx31"
   HCLOUD_LB_TYPE: "lb11"
+  HCLOUD_NAT_TYPE: "cpx11"
+  HCLOUD_K3S_SERVER_TYPE: "cpx31"
+  HCLOUD_K3S_AGENT_TYPE: "cpx31"
 
   # COMPONENT VERSIONS
   K3S_VERSION: "v1.29.1+k3s2"
-  GVISOR_VERSION: "latest"
   HETZNER_CCM_VERSION: "1.29.1"
   HETZNER_CSI_VERSION: "2.6.0"
   DIGITALOCEAN_CCM_VERSION: "0.1.58"
@@ -49,86 +40,92 @@ vars:
   DATABASE_URL: "{{.DATABASE_URL}}"
 
 tasks:
-  # PACKER WORKFLOWS
   _packer_build:
     internal: true
     silent: true
     desc: "Generic Packer Build Wrapper for Ubuntu"
+    dir: "{{.ROOT_DIR}}/{{.PACKER_DIR}}"
     env:
+      PACKER_PLUGIN_PATH: "{{.ROOT_DIR}}/{{.PACKER_DIR}}/.plugins"
       PKR_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
       PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
     cmds:
-      - packer init {{.PACKER_DIR}}
+      - packer init .
       - >-
         packer build {{.BUILD_ARGS}}
-        -var "docloud_ubuntu_version={{.DOCLOUD_UBUNTU_VERSION}}"
-        -var "hcloud_ubuntu_version={{.HCLOUD_UBUNTU_VERSION}}"
-        -var "gvisor_version={{.GVISOR_VERSION}}"
         -var "k3s_version={{.K3S_VERSION}}"
-        {{.PACKER_DIR}}
+        -var "docloud_k3s_type={{.DOCLOUD_K3S_TYPE}}"
+        -var "docloud_nat_type={{.DOCLOUD_NAT_TYPE}}"
+        -var "docloud_ubuntu_version={{.DOCLOUD_UBUNTU_VERSION}}"
+        -var "hcloud_k3s_type={{.HCLOUD_K3S_TYPE}}"
+        -var "hcloud_nat_type={{.HCLOUD_NAT_TYPE}}"
+        -var "hcloud_ubuntu_version={{.HCLOUD_UBUNTU_VERSION}}"
+        .
 
-  # Packer Hetzner Cloud
   packer:hz:
     desc: "Build Hetzner Cloud Infrastructure"
     cmds:
       - task: _packer_build
-        vars: { BUILD_ARGS: "-only=*.hcloud.*" }
+        vars: { BUILD_ARGS: "-only=*.hcloud.* -parallel-builds=2" }
 
-  # Packer DigitalOcean
   packer:do:
-    desc: "Build Hetzner Cloud Infrastructure"
+    desc: "Build DigitalOcean Cloud Infrastructure"
     cmds:
       - task: _packer_build
-        vars: { BUILD_ARGS: "-only=*.hcloud.*" }
+        vars: { BUILD_ARGS: "-only=*.docloud.* -parallel-builds=2" }
 
-  # TERRAFORM CORE ENGINE
   _tf:
     internal: true
-    dir: infra/terraform/providers/{{.PROVIDER}}
+    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/{{.PROVIDER}}"
     vars:
       TFSTATE_BUCKET: "{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}"
       CCM_VERSION: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_CCM_VERSION}}{{else}}{{.DIGITALOCEAN_CCM_VERSION}}{{end}}'
       CSI_VERSION: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_CSI_VERSION}}{{else}}{{.DIGITALOCEAN_CSI_VERSION}}{{end}}'
     env:
-      GOOGLE_APPLICATION_CREDENTIALS: "{{.TASKFILE_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}.json"
+      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}.json"
       DIGITALOCEAN_TOKEN: "{{.DOCLOUD_TOKEN}}"
       HCLOUD_TOKEN: "{{.HCLOUD_TOKEN}}"
 
-      # TF_VAR Data
+      # TF_VAR DATA
       TF_VAR_project_name: "{{.PROJECT_NAME}}"
+      TF_VAR_git_repo_url: "{{.GIT_REPO_URL}}"
+      TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
       TF_VAR_token: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_TOKEN}}{{else}}{{.DOCLOUD_TOKEN}}{{end}}'
-      TF_VAR_nat_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_NAT_TYPE}}{{else}}{{.DOCLOUD_NAT_TYPE}}{{end}}'
-      TF_VAR_master_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_MASTER_TYPE}}{{else}}{{.DOCLOUD_MASTER_TYPE}}{{end}}'
-      TF_VAR_worker_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_WORKER_TYPE}}{{else}}{{.DOCLOUD_WORKER_TYPE}}{{end}}'
-      TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}{{.DOCLOUD_LB_TYPE}}{{end}}'
+      TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
       TF_VAR_location: "{{.LOCATION}}"
 
-      TF_VAR_cloud_env: "{{.CLOUD_ENV}}"
-      TF_VAR_ssh_key_name: '{{if eq .PROVIDER "hetzner"}}{{.HETZNER_SSH_KEY_NAME}}{{else}}{{.DIGITALOCEAN_SSH_KEY_NAME}}{{end}}'
-      TF_VAR_github_repo_url: "{{.GITHUB_REPO_URL}}"
+      # Server Types
+      TF_VAR_k3s_server_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_SERVER_TYPE}}{{else}}{{.DOCLOUD_K3S_SERVER_TYPE}}{{end}}'
+      TF_VAR_k3s_agent_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_K3S_AGENT_TYPE}}{{else}}{{.DOCLOUD_K3S_AGENT_TYPE}}{{end}}'
+      TF_VAR_nat_gateway_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_NAT_TYPE}}{{else}}{{.DOCLOUD_NAT_TYPE}}{{end}}'
+      TF_VAR_load_balancer_type: '{{if eq .PROVIDER "hetzner"}}{{.HCLOUD_LB_TYPE}}{{else}}{{.DOCLOUD_LB_TYPE}}{{end}}'
+
+      # Tailscale
       TF_VAR_tailscale_auth_nat_key: "{{.TAILSCALE_AUTH_NAT_KEY}}"
       TF_VAR_tailscale_auth_k3s_server_key: "{{.TAILSCALE_AUTH_K3S_SERVER_KEY}}"
-      TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_AGENT_KEY}}"
+      TF_VAR_tailscale_auth_k3s_agent_key: "{{.TAILSCALE_AUTH_K3S_WORKER_KEY}}"
+
+      # S3 Backup Bucket
+      TF_VAR_etcd_s3_access_key: "{{.ETCD_S3_ACCESS_KEY}}"
+      TF_VAR_etcd_s3_secret_key: "{{.ETCD_S3_SECRET_KEY}}"
       TF_VAR_etcd_s3_bucket: "{{.PROJECT_NAME}}-etcd-{{.CLOUD_ENV}}"
       TF_VAR_etcd_s3_region: "{{.S3_REGION}}"
       TF_VAR_etcd_s3_endpoint: "https://storage.googleapis.com"
-      TF_VAR_etcd_s3_access_key: "{{.ETCD_S3_ACCESS_KEY}}"
-      TF_VAR_etcd_s3_secret_key: "{{.ETCD_S3_SECRET_KEY}}"
 
-      # Component Versions
+      # Manifest Versions
       TF_VAR_ccm_version: "{{.CCM_VERSION}}"
       TF_VAR_csi_version: "{{.CSI_VERSION}}"
-      TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
       TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
+      TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
       TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
+
     cmds:
       - echo "[TERRAFORM] {{.CMD}} -> {{.PROVIDER}} -> {{.LOCATION}} -> {{.CLOUD_ENV}}"
       - terraform init -reconfigure -backend-config="bucket={{.TFSTATE_BUCKET}}" -backend-config="prefix={{.PROVIDER}}"
       - terraform {{.CMD}} {{.ARGS}}
 
-  # HETZNER INFRASTRUCTURE
   hz:plan:
-    desc: "Plan Hetzner Ashburn (Dev)"
+    desc: "Plan Hetzner Ashburn"
     cmds:
       - task: _tf
         vars:
@@ -139,7 +136,7 @@ tasks:
           ARGS: "-out=tfplan"
 
   hz:apply:
-    desc: "Apply Hetzner Ashburn (Dev)"
+    desc: "Apply Hetzner Ashburn"
     cmds:
       - task: _tf
         vars:
@@ -150,7 +147,7 @@ tasks:
           ARGS: "-auto-approve tfplan"
 
   hz:destroy:
-    desc: "Destroy Hetzner Ashburn (Dev)"
+    desc: "Destroy Hetzner Ashburn"
     cmds:
       - task: _tf
         vars:
@@ -173,13 +170,15 @@ tasks:
 
   hz:kubeconfig:
     desc: "Write Hetzner Kubeconfig to disk"
+    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/hetzner"
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-dev.json"
     cmds:
       - mkdir -p ~/.kube
-      - terraform -chdir=infra/terraform/providers/hetzner output -raw kubeconfig > ~/.kube/config
+      - terraform output -raw kubeconfig > ~/.kube/config
       - chmod 600 ~/.kube/config
       - echo "✅ Kubeconfig successfully written to ~/.kube/config"
 
-  # DIGITALOCEAN INFRASTRUCTURE
   do:plan:
     desc: "Plan DigitalOcean NYC3 (Dev)"
     cmds:
@@ -226,42 +225,31 @@ tasks:
 
   do:kubeconfig:
     desc: "Write DigitalOcean Kubeconfig to disk"
+    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/digitalocean"
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-dev.json"
     cmds:
       - mkdir -p ~/.kube
-      - terraform -chdir=infra/terraform/providers/digitalocean output -raw kubeconfig > ~/.kube/config
+      - terraform output -raw kubeconfig > ~/.kube/config
       - chmod 600 ~/.kube/config
       - echo "✅ Kubeconfig successfully written to ~/.kube/config"
 
-  # BUILD WORKFLOWS (Choice of ko or Docker)
-  build:ko:api:
-    desc: "Build the API container image using ko (Go-optimized)"
-    dir: core
-    env:
-      KO_DOCKER_REPO: '{{.KO_DOCKER_REPO | default "ko.local"}}'
+  # ===========================================================================
+  # DEVELOPMENT & CODE GENERATION
+  # ===========================================================================
+  proto:gen:
+    desc: "Generate high-speed ConnectRPC Go and Rust code from Protobuf"
+    dir: proto
     cmds:
-      - ko build ./cmd/platform-api --bare
+      - go run github.com/bufbuild/buf/cmd/buf@latest generate
+      - echo "✅ Code generation complete in gen/"
 
-  build:ko:cli:
-    desc: "Build the CLI container image using ko (Go-optimized)"
-    dir: core
-    env:
-      KO_DOCKER_REPO: '{{.KO_DOCKER_REPO | default "ko.local"}}'
+  proto:lint:
+    desc: "Lint the Protobuf contracts"
+    dir: proto
     cmds:
-      - ko build ./cmd/platform-cli --bare
+      - go run github.com/bufbuild/buf/cmd/buf@latest lint
 
-  build:docker:api:
-    desc: "Build the API container image using Docker"
-    dir: core
-    cmds:
-      - docker build -t project-platform-api:latest --build-arg SERVICE_NAME=platform-api .
-
-  build:docker:cli:
-    desc: "Build the CLI container image using Docker"
-    dir: core
-    cmds:
-      - docker build -t project-platform-cli:latest --build-arg SERVICE_NAME=platform-cli .
-
-  # DATABASE WORKFLOWS
   db:up:
     desc: "Start local PostgreSQL database"
     cmds:
@@ -274,28 +262,27 @@ tasks:
 
   db:migrate:
     desc: "Run database migrations (up)"
-    silent: true
     cmds:
-      - go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-      - migrate -path database/migrations -database "{{.DATABASE_URL}}" up
+      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.DATABASE_URL}}" up
 
   db:migrate-down:
     desc: "Rollback the last database migration (down 1)"
     cmds:
-      - migrate -path database/migrations -database "{{.DATABASE_URL}}" down 1
+      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.DATABASE_URL}}" down 1
 
   db:create-migration:
     desc: "Create a new migration (usage: task db:create-migration NAME=create_users)"
     cmds:
-      - migrate create -ext sql -dir database/migrations -seq {{.NAME}}
+      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest create -ext sql -dir core/migrations -seq {{.NAME}}
     requires:
       vars: [NAME]
 
   db:generate:
-    desc: "Generate Go code from SQL using sqlc"
-    dir: database
+    desc: "Generate Go models and queries from SQL using sqlc"
+    dir: core
     cmds:
-      - sqlc generate
+      - go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+      - echo "✅ Database models regenerated in core/internal/db"
 
   db:setup:
     desc: "Spin up DB, wait, migrate, and generate code"
@@ -311,9 +298,20 @@ tasks:
     cmds:
       - docker exec -it project-platform-db-1 psql -U platform platform_db
 
-  # WEB APP WORKFLOWS
+  dev:api:
+    desc: "Run the Core API locally with live-reload (Air)"
+    dir: core
+    cmds:
+      - go run github.com/air-verse/air@latest -c .air.api.toml
+
+  dev:worker:
+    desc: "Run the Background Build Worker locally"
+    dir: core
+    cmds:
+      - go run github.com/air-verse/air@latest -c .air.worker.toml
+
   web:dev:
-    desc: "Show Web App"
+    desc: "Run the frontend dashboard"
     dir: web
     cmds:
       - npm run dev
