@@ -9,7 +9,7 @@ vars:
   PACKER_DIR: "infrastructure/packer"
 
   # Packer & Terraform Variables - Hetzner
-  HCLOUD_UBUNTU_VERSION: "ubuntu-22.04"
+  HCLOUD_UBUNTU_VERSION: "ubuntu-24.04"
   HCLOUD_K3S_TYPE: "cpx31"
   HCLOUD_LB_TYPE: "lb11"
   HCLOUD_NAT_TYPE: "cpx11"
@@ -46,17 +46,13 @@ tasks:
     desc: "Generic Packer Build Wrapper for Ubuntu"
     dir: "{{.ROOT_DIR}}/{{.PACKER_DIR}}"
     env:
-      PACKER_PLUGIN_PATH: "{{.ROOT_DIR}}/{{.PACKER_DIR}}/.plugins"
       PKR_VAR_hcloud_token: "{{.HCLOUD_TOKEN}}"
-      PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
+      # PKR_VAR_docloud_token: "{{.DOCLOUD_TOKEN}}"
     cmds:
       - packer init .
       - >-
         packer build {{.BUILD_ARGS}}
         -var "k3s_version={{.K3S_VERSION}}"
-        -var "docloud_k3s_type={{.DOCLOUD_K3S_TYPE}}"
-        -var "docloud_nat_type={{.DOCLOUD_NAT_TYPE}}"
-        -var "docloud_ubuntu_version={{.DOCLOUD_UBUNTU_VERSION}}"
         -var "hcloud_k3s_type={{.HCLOUD_K3S_TYPE}}"
         -var "hcloud_nat_type={{.HCLOUD_NAT_TYPE}}"
         -var "hcloud_ubuntu_version={{.HCLOUD_UBUNTU_VERSION}}"
