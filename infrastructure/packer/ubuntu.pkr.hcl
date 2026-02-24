@@ -292,14 +292,35 @@ build {
   }
 
   # --- K3S BINARY ---
-  provisioner "shell" {
-    inline = [
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
-      "cp /etc/systemd/system/k3s.service /etc/systemd/system/k3s-agent.service",
-      "sed -i 's|/usr/local/bin/k3s server|/usr/local/bin/k3s agent|g' /etc/systemd/system/k3s-agent.service",
-      "systemctl daemon-reload"
-    ]
-  }
+  # --- K3S BINARY ---
+    provisioner "shell" {
+      inline = [
+        "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true INSTALL_K3S_VERSION='${var.k3s_version}' sh -",
+        "cat << 'EOF' > /etc/systemd/system/k3s-agent.service",
+        "[Unit]",
+        "Description=Lightweight Kubernetes Agent",
+        "Documentation=https://k3s.io",
+        "Wants=network-online.target",
+        "After=network-online.target",
+        "",
+        "[Service]",
+        "Type=notify",
+        "EnvironmentFile=-/etc/default/k3s",
+        "EnvironmentFile=-/etc/sysconfig/k3s",
+        "EnvironmentFile=-/etc/systemd/system/k3s.service.env",
+        "ExecStart=/usr/local/bin/k3s agent",
+        "KillMode=process",
+        "Delegate=yes",
+        "LimitNOFILE=1048576",
+        "LimitNPROC=infinity",
+        "TasksMax=infinity",
+        "",
+        "[Install]",
+        "WantedBy=multi-user.target",
+        "EOF",
+        "systemctl daemon-reload"
+      ]
+    }
 
   # # --- DNS HARDENING ---
   # provisioner "shell" {

@@ -3,7 +3,7 @@ hostname: ${hostname}
 manage_etc_hosts: true
 
 write_files:
-  # 1. NETPLAN CONFIGURATION: Fixed indentation for the routes block
+  # NETPLAN CONFIGURATION: Fixed indentation for the routes block
   - path: /etc/netplan/60-custom.yaml
     permissions: "0600"
     content: |
@@ -19,7 +19,7 @@ write_files:
                 via: 10.0.0.1
                 on-link: true
 
-  # 2. K3S REGISTRIES: Configured for your local platform registry
+  # K3S REGISTRIES: Configured for your local platform registry
   - path: /etc/rancher/k3s/registries.yaml
     permissions: "0644"
     content: |
@@ -28,7 +28,7 @@ write_files:
           endpoint:
             - "http://10.43.0.50:5000"
 
-  # 3. GVISOR CONFIGURATION: Template for containerd to recognize the runsc runtime
+  # GVISOR CONFIGURATION: Template for containerd to recognize the runsc runtime
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -41,7 +41,7 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-  # 4. OPTIMIZED AGENT BOOTSTRAP SCRIPT
+  # OPTIMIZED AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0700"
     owner: root:root
@@ -99,12 +99,6 @@ runcmd:
   - netplan apply
   - sleep 5
   - systemctl restart systemd-resolved || true
-
-  # Install gVisor
-  - |
-    echo "Installing gVisor..."
-    curl -fsSL https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc -o /usr/local/bin/runsc
-    chmod +x /usr/local/bin/runsc
 
   # Join Tailscale
   - |
