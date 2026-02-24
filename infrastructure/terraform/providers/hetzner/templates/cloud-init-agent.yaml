@@ -3,7 +3,8 @@ hostname: ${hostname}
 manage_etc_hosts: true
 
 write_files:
-  - path: /etc/netplan/60-private-net.yaml
+  # 1. NETPLAN CONFIGURATION: Fixed indentation for the routes block
+  - path: /etc/netplan/60-custom.yaml
     permissions: "0600"
     content: |
       network:
@@ -11,16 +12,14 @@ write_files:
         ethernets:
           enp7s0:
             dhcp4: true
-            dhcp4-overrides:
-              use-routes: false
+            nameservers:
+              addresses: [1.1.1.1, 8.8.8.8]
             routes:
-              - to: 10.0.0.1
-                scope: link
-              - to: 10.0.0.0/16
+              - to: 0.0.0.0/0
                 via: 10.0.0.1
-              - to: default
-                via: ${network_gateway}
+                on-link: true
 
+  # 2. K3S REGISTRIES: Configured for your local platform registry
   - path: /etc/rancher/k3s/registries.yaml
     permissions: "0644"
     content: |
@@ -29,6 +28,7 @@ write_files:
           endpoint:
             - "http://10.43.0.50:5000"
 
+  # 3. GVISOR CONFIGURATION: Template for containerd to recognize the runsc runtime
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
@@ -41,6 +41,7 @@ write_files:
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
+  # 4. OPTIMIZED AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0700"
     owner: root:root
@@ -48,28 +49,33 @@ write_files:
       #!/bin/bash
       set -e
 
+      echo "[Bootstrap] Ensuring SDN routing paths..."
+      IFACE=$(ip -4 route show to default | awk '{print $5}')
+      # Ensure we have a route to the NAT gateway even if netplan is slow
+      ip route add default via 10.0.0.1 dev $IFACE onlink || true
+
+      echo "[Bootstrap] Waiting for Internet connectivity..."
       for i in {1..30}; do
         if ping -c 1 8.8.8.8 >/dev/null 2>&1; then break; fi
+        echo "Waiting for NAT gateway (10.0.0.1)..."
         sleep 2
       done
 
-      echo "[Bootstrap] Fetching HCloud Server ID..."
-      for i in {1..10}; do
-        HCLOUD_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id)
-        if [ -n "$HCLOUD_ID" ]; then break; fi
-        sleep 2
-      done
-
-      if [ -z "$HCLOUD_ID" ]; then exit 1; fi
-
+      echo "[Bootstrap] Waiting for Tailscale IP..."
       for i in {1..30}; do
-        TS_IP=$(tailscale ip -4 2>/dev/null)
+        TS_IP=$(tailscale ip -4 2>/dev/null || true)
         if [ -n "$TS_IP" ]; then break; fi
+        echo "Waiting for Tailscale interface..."
         sleep 2
       done
 
-      mkdir -p /etc/rancher/k3s
+      if [ -z "$TS_IP" ]; then
+        echo "CRITICAL: Tailscale IP timeout."
+        exit 1
+      fi
 
+      echo "[Bootstrap] Generating K3s Agent Configuration..."
+      mkdir -p /etc/rancher/k3s
       cat > /etc/rancher/k3s/config.yaml <<EOF
       server: https://${k3s_control_plane_url}
       token: ${k3s_token}
@@ -77,42 +83,47 @@ write_files:
       node-external-ip: $TS_IP
       kubelet-arg:
         - "cloud-provider=external"
-        - "provider-id=hcloud://$HCLOUD_ID"
         - "container-log-max-files=3"
         - "container-log-max-size=10Mi"
       EOF
 
+      echo "[Bootstrap] Starting K3s Agent (Packer-baked service)..."
       systemctl daemon-reload
       systemctl enable k3s-agent
-      systemctl start k3s-agent
+      systemctl restart k3s-agent
+      echo "=== K3s Agent Bootstrap Complete ==="
 
 runcmd:
+  # Network Initialization
   - netplan generate
   - netplan apply
   - sleep 5
-  - ip route add default via ${network_gateway} dev enp7s0
+  - systemctl restart systemd-resolved || true
 
-  # Start tailscaled — enabled by Packer but not yet running
-  - systemctl start tailscaled
+  # Install gVisor
   - |
-    for i in $(seq 1 12); do
-      [ -S /run/tailscale/tailscaled.sock ] && break
-      sleep 5
+    echo "Installing gVisor..."
+    curl -fsSL https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc -o /usr/local/bin/runsc
+    chmod +x /usr/local/bin/runsc
+
+  # Join Tailscale
+  - |
+    LOG="/var/log/tailscale-join.log"
+    echo "Starting Tailscale join..." > $LOG
+    for i in $(seq 1 10); do
+      if [ -S /run/tailscale/tailscaled.sock ]; then break; fi
+      sleep 3
     done
 
-  # Now join
-  - |
-    NEXT_WAIT_TIME=0
     until tailscale up \
       --authkey=${tailscale_auth_k3s_agent_key} \
       --ssh \
       --hostname=${hostname} \
       --advertise-tags="tag:k3s-agent" \
-      --reset >> /var/log/tailscale-join.log 2>&1 \
-      || [ $NEXT_WAIT_TIME -eq 12 ]; do
+      --reset >> $LOG 2>&1; do
+      echo "Tailscale join failed, retrying..." >> $LOG
       sleep 5
-      NEXT_WAIT_TIME=$((NEXT_WAIT_TIME+1))
     done
 
-  - /opt/bootstrap/inject-manifests.sh
+  # Final Agent Initialization
   - /usr/local/bin/k3s-start.sh

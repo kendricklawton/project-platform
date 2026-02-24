@@ -54,37 +54,37 @@ variable "hcloud_k3s_type" {
 
 # LOCALS
 locals {
-  timestamp = formatdate("YYYYMMDDhhmmss", timestamp())
+  timestamp = formatdate("YYMMDD", timestamp())
 }
 
 # SOURCES: NAT GATEWAY
-# source "hcloud" "nat_ash" {
-#   token         = var.hcloud_token
-#   image         = var.hcloud_ubuntu_version
-#   location      = "ash"
-#   server_type   = var.hcloud_nat_type
-#   ssh_username  = "root"
-#   snapshot_name = "nat-gateway-ubuntu-amd64-${local.timestamp}"
-#   snapshot_labels = {
-#     role    = "nat-gateway"
-#     region  = "ash"
-#     version = local.timestamp
-#   }
-# }
+source "hcloud" "nat_ash" {
+  token         = var.hcloud_token
+  image         = var.hcloud_ubuntu_version
+  location      = "ash"
+  server_type   = var.hcloud_nat_type
+  ssh_username  = "root"
+  snapshot_name = "ash-nat-gateway-ubuntu-amd64-${local.timestamp}"
+  snapshot_labels = {
+    role    = "nat-gateway"
+    location  = "ash"
+    version = local.timestamp
+  }
+}
 
-# source "hcloud" "nat_hil" {
-#   token         = var.hcloud_token
-#   image         = var.hcloud_ubuntu_version
-#   location      = "hil"
-#   server_type   = var.hcloud_nat_type
-#   ssh_username  = "root"
-#   snapshot_name = "nat-gateway-ubuntu-amd64-${local.timestamp}"
-#   snapshot_labels = {
-#     role    = "nat-gateway"
-#     region  = "hil"
-#     version = local.timestamp
-#   }
-# }
+source "hcloud" "nat_hil" {
+  token         = var.hcloud_token
+  image         = var.hcloud_ubuntu_version
+  location      = "hil"
+  server_type   = var.hcloud_nat_type
+  ssh_username  = "root"
+  snapshot_name = "hil-nat-gateway-ubuntu-amd64-${local.timestamp}"
+  snapshot_labels = {
+    role    = "nat-gateway"
+    location  = "hil"
+    version = local.timestamp
+  }
+}
 
 # SOURCES: K3S NODE
 source "hcloud" "k3s_ash" {
@@ -93,10 +93,10 @@ source "hcloud" "k3s_ash" {
   location      = "ash"
   server_type   = var.hcloud_k3s_type
   ssh_username  = "root"
-  snapshot_name = "k3s-node-ubuntu-amd64-${local.timestamp}"
+  snapshot_name = "ash-k3s-node-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
     role    = "k3s-node"
-    region  = "ash"
+    location  = "ash"
     version = local.timestamp
   }
 }
@@ -107,14 +107,127 @@ source "hcloud" "k3s_hil" {
   location      = "hil"
   server_type   = var.hcloud_k3s_type
   ssh_username  = "root"
-  snapshot_name = "k3s-node-ubuntu-amd64-${local.timestamp}"
+  snapshot_name = "hil-k3s-node-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
     role    = "k3s-node"
-    region  = "hil"
+    location = "hil"
     version = local.timestamp
   }
 }
 
+
+# BUILD: NAT GATEWAY
+build {
+  name    = "nat"
+  sources = ["source.hcloud.nat_ash", "source.hcloud.nat_hil"]
+
+  provisioner "shell" {
+    inline = [
+      "echo 'Waiting for cloud-init to finish...'",
+      "/usr/bin/cloud-init status --wait"
+    ]
+  }
+
+  # --- PACKAGES & OS CONFIG ---
+  provisioner "shell" {
+    environment_vars = ["DEBIAN_FRONTEND=noninteractive"]
+    inline = [
+      # Pre-seed iptables-persistent to avoid interactive prompts
+      "echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections",
+      "echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections",
+
+      # Update and Install Packages (Added unattended-upgrades)
+      "apt-get update -y",
+      "apt-get upgrade -y",
+      "apt-get install -y iptables-persistent curl jq fail2ban unattended-upgrades",
+    ]
+  }
+
+  # --- SECURITY HARDENING ---
+  provisioner "shell" {
+    inline = [
+      # Enable fail2ban and automatic security patches
+      "systemctl enable fail2ban",
+      "systemctl enable unattended-upgrades",
+
+      # Lock down SSH (Disallow passwords and root login since we use Tailscale SSH)
+      "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config",
+      "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
+      "systemctl restart ssh || systemctl restart sshd"
+    ]
+  }
+
+  # --- KERNEL TUNING FOR HIGH THROUGHPUT NAT ---
+  provisioner "shell" {
+    inline = [
+      "cat << 'EOF' > /etc/sysctl.d/99-nat-tuning.conf",
+      "# Enable IP Forwarding",
+      "net.ipv4.ip_forward=1",
+      "",
+      "# TCP BBR Congestion Control for better throughput",
+      "net.core.default_qdisc=fq",
+      "net.ipv4.tcp_congestion_control=bbr",
+      "",
+      "# Increase connection tracking table size (Prevent 'table full, dropping packet')",
+      "net.netfilter.nf_conntrack_max=1048576",
+      "",
+      "# Widen the ephemeral port range for NAT translations",
+      "net.ipv4.ip_local_port_range=1024 65535",
+      "",
+      "# Fast recycling of TIME_WAIT sockets",
+      "net.ipv4.tcp_tw_reuse=1",
+      "EOF",
+      "sysctl --system"
+    ]
+  }
+
+  # --- FIREWALL RULES (Base rules without dynamic MASQUERADE) ---
+  provisioner "shell" {
+    inline = [
+      "cat << 'EOF' > /etc/iptables/rules.v4",
+      "*filter",
+      ":INPUT ACCEPT [0:0]",
+      ":FORWARD ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      "-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+      "-A INPUT -i lo -j ACCEPT",
+      "-A INPUT -p udp --dport 41641 -j ACCEPT",
+      "-A INPUT -s 10.0.0.0/16 -j ACCEPT",
+      "-A INPUT -j DROP",
+      "-A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT",
+      "-A FORWARD -s 10.0.0.0/16 -j ACCEPT",
+      "COMMIT",
+      "*nat",
+      ":PREROUTING ACCEPT [0:0]",
+      ":INPUT ACCEPT [0:0]",
+      ":OUTPUT ACCEPT [0:0]",
+      ":POSTROUTING ACCEPT [0:0]",
+      "COMMIT",
+      "EOF"
+    ]
+  }
+
+  # --- TAILSCALE ---
+  provisioner "shell" {
+    inline = [
+      # Install Tailscale binaries
+      "curl -fsSL https://tailscale.com/install.sh | sh",
+      # Ensure the service is enabled to start on boot
+      "systemctl enable tailscaled"
+    ]
+  }
+
+  # --- CLEANUP ---
+    provisioner "shell" {
+      inline = [
+        "apt-get clean",
+        "rm -rf /var/lib/apt/lists/*",
+        "rm -f /etc/netplan/50-cloud-init.yaml",
+        "cloud-init clean --logs --seed",
+        "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
+      ]
+    }
+}
 
 # BUILD: K3S NODE
 build {
@@ -136,6 +249,16 @@ build {
       "apt-get install -y ca-certificates curl wget python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping jq",
       "systemctl enable systemd-timesyncd",
       "timedatectl set-ntp true"
+    ]
+  }
+
+  # --- SECURITY HARDENING (Enforce Tailscale SSH Only) ---
+  provisioner "shell" {
+    inline = [
+      # Disable standard SSH password and root login
+      "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config",
+      "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
+      "systemctl restart ssh || systemctl restart sshd"
     ]
   }
 
@@ -178,13 +301,13 @@ build {
     ]
   }
 
-  # --- DNS HARDENING ---
-  provisioner "shell" {
-    inline = [
-      "rm -f /etc/resolv.conf",
-      "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf"
-    ]
-  }
+  # # --- DNS HARDENING ---
+  # provisioner "shell" {
+  #   inline = [
+  #     "rm -f /etc/resolv.conf",
+  #     "printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf"
+  #   ]
+  # }
 
   # --- KERNEL TUNING ---
   provisioner "shell" {
@@ -227,15 +350,15 @@ build {
     ]
   }
 
+
   # --- CLEANUP ---
-  provisioner "shell" {
-    inline = [
-      "apt-get clean",
-      "rm -rf /var/lib/apt/lists/*",
-      "rm -f /etc/netplan/50-cloud-init.yaml",
-      "cloud-init clean --logs --seed",
-      "rm -f /etc/machine-id /var/lib/dbus/machine-id",
-      "truncate -s 0 /etc/hostname"
-    ]
-  }
+    provisioner "shell" {
+      inline = [
+        "apt-get clean",
+        "rm -rf /var/lib/apt/lists/*",
+        "rm -f /etc/netplan/50-cloud-init.yaml",
+        "cloud-init clean --logs --seed",
+        "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
+      ]
+    }
 }

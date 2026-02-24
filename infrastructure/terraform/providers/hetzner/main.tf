@@ -64,8 +64,8 @@ locals {
   prefix       = "${var.cloud_env}-${local.network_zone}"
 
   nat_server_ip                = cidrhost("10.0.1.0/24", 254)
-  k3s_api_load_balancer_ip     = cidrhost("10.0.1.0/24", 253)
-  k3s_ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 252)
+  k3s_api_load_balancer_ip     = cidrhost("10.0.1.0/24", 244)
+  k3s_ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 234)
 
   config = {
     dev = {
@@ -91,13 +91,14 @@ locals {
 }
 
 # DATA SOURCES
-data "hcloud_image" "k3s_node" {
-  with_selector = "role=k3s-node,region=${var.location}"
+data "hcloud_image" "nat-gateway" {
+  with_selector = "role=nat-gateway,location=${var.location}"
   most_recent   = true
 }
 
-data "hcloud_image" "ubuntu" { # ✅ honest name
-  name = "ubuntu-24.04"
+data "hcloud_image" "k3s_node" {
+  with_selector = "role=k3s-node,location=${var.location}"
+  most_recent   = true
 }
 
 data "hcloud_ssh_key" "admin" {
@@ -118,9 +119,9 @@ resource "hcloud_network_subnet" "k3s_nodes" {
 }
 
 resource "hcloud_server" "nat" {
-  name  = "${local.prefix}-nat"
-  image = data.hcloud_image.ubuntu.id
-
+  name = "${local.prefix}-nat"
+  # image = data.hcloud_image.ubuntu.id
+  image       = data.hcloud_image.nat-gateway.id
   server_type = var.nat_gateway_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
@@ -305,12 +306,11 @@ resource "time_sleep" "wait_for_init_node" {
 # PHASE 2: CONTROL PLANE JOIN (Additional servers for High Availability)
 resource "hcloud_server" "control_plane_join" {
   count       = local.env.server_count > 1 ? local.env.server_count - 1 : 0
-  name        = format("${local.prefix}-k3s-server-%02d", count.index + 2)
+  name        = format("${local.prefix}-k3s-sv-%02d", count.index + 2)
   image       = data.hcloud_image.k3s_node.id
   server_type = var.k3s_server_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
-
 
   public_net {
     ipv4_enabled = false
@@ -388,136 +388,4 @@ resource "hcloud_load_balancer_target" "ingress_targets" {
   load_balancer_id = hcloud_load_balancer.ingress.id
   server_id        = hcloud_server.agent[count.index].id
   use_private_ip   = true
-}
-
-# FIREWALL RULES
-# --- FIREWALL RULES ---
-resource "hcloud_firewall" "cluster_fw" {
-  name = "${local.prefix}-fw"
-
-  # K3s API
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "6443"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # Kubelet
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "10250"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # etcd
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "2379-2380"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # VXLAN Overlay (CNI)
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "8472"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # Cilium Health
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "4240"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # Cilium VXLAN
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "8473"
-    source_ips = ["10.0.0.0/16"]
-  }
-
-  # HTTP (Public)
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "80"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # HTTPS (Public)
-  rule {
-    direction  = "in"
-    protocol   = "tcp"
-    port       = "443"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Tailscale Direct
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "41641"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Wireguard Fallback
-  rule {
-    direction  = "in"
-    protocol   = "udp"
-    port       = "51820"
-    source_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Allow all outbound TCP (HTTP/HTTPS, Image Pulling, API calls)
-  rule {
-    direction       = "out"
-    protocol        = "tcp"
-    port            = "any"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Allow all outbound UDP (DNS resolution, Tailscale handshakes)
-  rule {
-    direction       = "out"
-    protocol        = "udp"
-    port            = "any"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  # Allow all outbound ICMP (Ping / Path MTU Discovery)
-  rule {
-    direction       = "out"
-    protocol        = "icmp"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-  }
-
-  apply_to { label_selector = "cluster=${local.prefix}" }
-}
-
-# OUTPUTS
-# output "api_endpoint" {
-#   value = var.k3s_api_load_balancer_ip
-# }
-
-# output "public_ingress_ip" {
-#   value = hcloud_load_balancer.ingress.ipv4
-# }
-
-# output "control_plane_ids" {
-#   value = concat([hcloud_server.control_plane_init.id], hcloud_server.control_plane_join[*].id)
-# }
-
-# output "worker_ids" {
-#   value = hcloud_server.agent[*].id
-# }
-
-output "nat_public_ip" {
-  value = hcloud_server.nat.ipv4_address
 }
