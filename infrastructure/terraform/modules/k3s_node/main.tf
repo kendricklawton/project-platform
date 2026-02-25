@@ -25,6 +25,10 @@ variable "argocd_version" {
   type = string
 }
 
+variable "sealed_secrets_version" {
+  type = string
+}
+
 variable "git_repo_url" {
   type = string
 }
@@ -61,10 +65,13 @@ locals {
     "120-ingress-nginx.yaml" = templatefile("${path.module}/bootstrap/120-ingress-nginx.yaml", {
       IngressNginxVersion = var.ingress_nginx_version
     })
-    # "130-agrocd.yaml" = templatefile("${path.module}/bootstrap/130-agrocd.yaml", {
+    "130-sealed-secrets.yaml" = templatefile("${path.module}/bootstrap/130-sealed-secrets.yaml", {
+      SealedSecretsVersion = var.sealed_secrets_version
+    })
+    # "140-agrocd.yaml" = templatefile("${path.module}/bootstrap/130-agrocd.yaml", {
     #   ArgoCDVersion = var.argocd_version
     # })
-    # "140-root-app.yaml" = templatefile("${path.module}/bootstrap/140-root-app.yaml", {
+    # "150-root-app.yaml" = templatefile("${path.module}/bootstrap/140-root-app.yaml", {
     #   GitRepoURL = var.git_repo_url
     # })
   }

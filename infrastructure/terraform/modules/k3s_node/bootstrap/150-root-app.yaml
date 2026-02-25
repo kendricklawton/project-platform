@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: "${GitRepoURL}"
     targetRevision: main
-    path: infrastructure/manifests
+    path: infrastructure/argocd/apps
   destination:
     server: "https://kubernetes.default.svc"
     namespace: argocd

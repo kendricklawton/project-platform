@@ -49,6 +49,7 @@ variable "csi_version" { type = string }
 variable "cilium_version" { type = string }
 variable "ingress_nginx_version" { type = string }
 variable "argocd_version" { type = string }
+variable "sealed_secrets_version" { type = string }
 variable "hcloud_mtu" {
   type    = number
   default = 1450
@@ -198,18 +199,19 @@ resource "random_password" "k3s_token" {
 }
 
 module "k3s_manifests" {
-  source                = "../../modules/k3s_node"
-  cloud_provider_name   = "hcloud"
-  cloud_provider_mtu    = 1450
-  k3s_load_balancer_ip  = local.k3s_api_load_balancer_ip
-  cilium_version        = var.cilium_version
-  ingress_nginx_version = var.ingress_nginx_version
-  argocd_version        = var.argocd_version
-  git_repo_url          = var.git_repo_url
-  token                 = var.token
-  hcloud_network_name   = hcloud_network.main.name
-  ccm_version           = var.ccm_version
-  csi_version           = var.csi_version
+  source                 = "../../modules/k3s_node"
+  cloud_provider_name    = "hcloud"
+  cloud_provider_mtu     = 1450
+  k3s_load_balancer_ip   = local.k3s_api_load_balancer_ip
+  cilium_version         = var.cilium_version
+  ingress_nginx_version  = var.ingress_nginx_version
+  sealed_secrets_version = var.sealed_secrets_version
+  argocd_version         = var.argocd_version
+  git_repo_url           = var.git_repo_url
+  token                  = var.token
+  hcloud_network_name    = hcloud_network.main.name
+  ccm_version            = var.ccm_version
+  csi_version            = var.csi_version
 }
 
 # --- PHASE 1: CONTROL PLANE INIT ---
