@@ -19,11 +19,6 @@ type contextKey string
 
 const userIDKey contextKey = "user_id"
 
-func GetUserID(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(userIDKey).(uuid.UUID)
-	return id, ok
-}
-
 // RequireAuth is a middleware that validates authentication and injects the UserID into the context.
 func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

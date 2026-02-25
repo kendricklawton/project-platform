@@ -3,7 +3,7 @@ hostname: ${hostname}
 manage_etc_hosts: true
 
 write_files:
-  # NETPLAN CONFIGURATION: Fixed indentation for the routes block
+  # NETPLAN CONFIGURATION
   - path: /etc/netplan/60-custom.yaml
     permissions: "0600"
     content: |
@@ -19,7 +19,7 @@ write_files:
                 via: 10.0.0.1
                 on-link: true
 
-  # K3S REGISTRIES: Configured for your local platform registry
+  # K3S REGISTRIES
   - path: /etc/rancher/k3s/registries.yaml
     permissions: "0644"
     content: |
@@ -28,58 +28,95 @@ write_files:
           endpoint:
             - "http://10.43.0.50:5000"
 
-  # GVISOR CONFIGURATION: Template for containerd to recognize the runsc runtime
+  # GVISOR CONFIGURATION
+  # Use {{ template "base" . }} to inherit K3s default containerd config
+  # instead of manually redefining deprecated v1 plugin keys (plugins.opt / plugins.cri)
+  # which break on newer containerd versions bundled with K3s and cause k3s-agent to crash loop
   - path: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     permissions: "0644"
     content: |
-      [plugins.opt]
-        path = "{{ .NodeConfig.Containerd.Opt }}"
-      [plugins.cri]
-        stream_server_address = "127.0.0.1"
-        stream_server_port = "10010"
-        enable_selinux = {{ .NodeConfig.SELinux }}
+      {{ template "base" . }}
+
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
         runtime_type = "io.containerd.runsc.v1"
 
-  # OPTIMIZED AGENT BOOTSTRAP SCRIPT
+  # AGENT BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0700"
     owner: root:root
     content: |
       #!/bin/bash
-      set -e
+      set -euo pipefail
+      LOG="/var/log/k3s-bootstrap.log"
+      exec > >(tee -a "$LOG") 2>&1
+      echo "=== K3s Agent Bootstrap Started at $(date) ==="
 
+      # -------------------------------------------------------
+      # 1. CSI host paths — must exist BEFORE k3s-agent starts
+      # -------------------------------------------------------
+      echo "[Bootstrap] Ensuring CSI host paths exist..."
+      mkdir -p /var/lib/rancher/k3s/agent/kubelet/plugins_registry
+      mkdir -p /var/lib/rancher/k3s/agent/kubelet/plugins
+      chmod 755 /var/lib/rancher/k3s/agent/kubelet/plugins_registry
+      chmod 755 /var/lib/rancher/k3s/agent/kubelet/plugins
+
+      # -------------------------------------------------------
+      # 2. SDN routing — ensure default route via NAT gateway
+      # -------------------------------------------------------
       echo "[Bootstrap] Ensuring SDN routing paths..."
-      IFACE=$(ip -4 route show to default | awk '{print $5}')
-      # Ensure we have a route to the NAT gateway even if netplan is slow
-      ip route add default via 10.0.0.1 dev $IFACE onlink || true
-
-      echo "[Bootstrap] Waiting for Internet connectivity..."
-      for i in {1..30}; do
-        if ping -c 1 8.8.8.8 >/dev/null 2>&1; then break; fi
-        echo "Waiting for NAT gateway (10.0.0.1)..."
-        sleep 2
-      done
-
-      echo "[Bootstrap] Waiting for Tailscale IP..."
-      for i in {1..30}; do
-        TS_IP=$(tailscale ip -4 2>/dev/null || true)
-        if [ -n "$TS_IP" ]; then break; fi
-        echo "Waiting for Tailscale interface..."
-        sleep 2
-      done
-
-      if [ -z "$TS_IP" ]; then
-        echo "CRITICAL: Tailscale IP timeout."
-        exit 1
+      DEFAULT_DEV=$(ip -4 route show to default | awk '{print $5}' | head -1)
+      if [ -n "$DEFAULT_DEV" ]; then
+        ip route replace default via 10.0.0.1 dev "$DEFAULT_DEV" onlink || true
+      else
+        echo "[WARN] No default route device found, skipping route setup"
       fi
 
+      # -------------------------------------------------------
+      # 3. Wait for Tailscale IP to be available
+      # -------------------------------------------------------
+      echo "[Bootstrap] Waiting for Tailscale IP..."
+      TS_IP=""
+      for i in $(seq 1 30); do
+        TS_IP=$(tailscale ip -4 2>/dev/null || true)
+        if [ -n "$TS_IP" ]; then
+          echo "[Bootstrap] Tailscale IP acquired: $TS_IP"
+          break
+        fi
+        echo "[Bootstrap] Tailscale not ready yet (attempt $i/30)..."
+        sleep 5
+      done
+      if [ -z "$TS_IP" ]; then
+        echo "[WARN] Tailscale IP not available — node-external-ip will be empty"
+      fi
+
+      # -------------------------------------------------------
+      # 4. Wait for K3s API server to be reachable
+      #    This prevents k3s-agent from crash-looping when
+      #    the server node hasn't finished bootstrapping yet
+      # -------------------------------------------------------
+      echo "[Bootstrap] Waiting for K3s API server at ${k3s_control_plane_url}..."
+      for i in $(seq 1 60); do
+        if curl -sk --connect-timeout 3 "https://${k3s_control_plane_url}/ping" >/dev/null 2>&1; then
+          echo "[Bootstrap] API server is reachable"
+          break
+        fi
+        if [ "$i" -eq 60 ]; then
+          echo "[ERROR] API server not reachable after 5 minutes — starting agent anyway"
+        fi
+        sleep 5
+      done
+
+      # -------------------------------------------------------
+      # 5. Generate K3s agent config
+      # -------------------------------------------------------
+      NODE_IP=$(hostname -I | awk '{print $1}')
       echo "[Bootstrap] Generating K3s Agent Configuration..."
+      echo "[Bootstrap]   node-ip=$NODE_IP  node-external-ip=$TS_IP"
       mkdir -p /etc/rancher/k3s
       cat > /etc/rancher/k3s/config.yaml <<EOF
       server: https://${k3s_control_plane_url}
       token: ${k3s_token}
-      node-ip: $(hostname -I | awk '{print $1}')
+      node-ip: $NODE_IP
       node-external-ip: $TS_IP
       kubelet-arg:
         - "cloud-provider=external"
@@ -87,37 +124,51 @@ write_files:
         - "container-log-max-size=10Mi"
       EOF
 
-      echo "[Bootstrap] Starting K3s Agent (Packer-baked service)..."
+      # -------------------------------------------------------
+      # 6. Clean start of k3s-agent
+      # -------------------------------------------------------
+      echo "[Bootstrap] Stopping any existing k3s-agent..."
+      systemctl stop k3s-agent 2>/dev/null || true
+      sleep 2
+
+      echo "[Bootstrap] Starting k3s-agent..."
       systemctl daemon-reload
       systemctl enable k3s-agent
-      systemctl restart k3s-agent
-      echo "=== K3s Agent Bootstrap Complete ==="
+      systemctl start k3s-agent
+
+      # -------------------------------------------------------
+      # 7. Verify agent joined successfully
+      # -------------------------------------------------------
+      echo "[Bootstrap] Waiting for k3s-agent to stabilize..."
+      sleep 15
+      if systemctl is-active --quiet k3s-agent; then
+        echo "=== K3s Agent Bootstrap Complete — agent is running ==="
+      else
+        echo "[ERROR] k3s-agent is not running after bootstrap!"
+        journalctl -u k3s-agent --no-pager --since "2min ago" | tail -30
+        exit 1
+      fi
 
 runcmd:
-  # Network Initialization
   - netplan generate
   - netplan apply
   - sleep 5
   - systemctl restart systemd-resolved || true
 
-  # Join Tailscale
+  # Join Tailscale — retry until successful
   - |
     LOG="/var/log/tailscale-join.log"
-    echo "Starting Tailscale join..." > $LOG
-    for i in $(seq 1 10); do
-      if [ -S /run/tailscale/tailscaled.sock ]; then break; fi
-      sleep 3
-    done
-
-    until tailscale up \
-      --authkey=${tailscale_auth_k3s_agent_key} \
-      --ssh \
-      --hostname=${hostname} \
-      --advertise-tags="tag:k3s-agent" \
-      --reset >> $LOG 2>&1; do
-      echo "Tailscale join failed, retrying..." >> $LOG
+    echo "Waiting for tailscaled..." >> $LOG
+    for i in $(seq 1 24); do
+      [ -S /run/tailscale/tailscaled.sock ] && break
       sleep 5
     done
+    echo "tailscaled socket ready, joining..." >> $LOG
+    until tailscale up \
+      --authkey=${tailscale_auth_k3s_agent_key} \
+      --ssh --hostname=${hostname} --advertise-tags="tag:k3s-agent" --reset >> $LOG 2>&1; do
+      sleep 5
+    done
+    echo "Tailscale joined successfully" >> $LOG
 
-  # Final Agent Initialization
   - /usr/local/bin/k3s-start.sh

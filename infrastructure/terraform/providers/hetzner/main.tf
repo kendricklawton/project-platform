@@ -49,40 +49,45 @@ variable "csi_version" { type = string }
 variable "cilium_version" { type = string }
 variable "ingress_nginx_version" { type = string }
 variable "argocd_version" { type = string }
+variable "hcloud_mtu" {
+  type    = number
+  default = 1450
+}
 
-# Provider
 provider "hcloud" {
   token = var.token
 }
 
 locals {
-  location_zone_map = {
-    "ash" = "us-east"
-    "hil" = "us-west"
+  location_zone_map = { "ash" = "us-east", "hil" = "us-west" }
+  network_zone      = local.location_zone_map[var.location]
+  prefix            = "${var.cloud_env}-${local.network_zone}"
+
+  # Infrastructure IPs
+  nat_server_ip                = cidrhost("10.0.1.0/24", 2)
+  k3s_api_load_balancer_ip     = cidrhost("10.0.1.0/24", 11)
+  k3s_ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 12)
+
+  # Server/Agent Configuration Map
+  cluster_config = {
+    dev  = { server_count = 1, agent_count = 1 }
+    prod = { server_count = 3, agent_count = 3 }
   }
-  network_zone = local.location_zone_map[var.location]
-  prefix       = "${var.cloud_env}-${local.network_zone}"
 
-  nat_server_ip                = cidrhost("10.0.1.0/24", 254)
-  k3s_api_load_balancer_ip     = cidrhost("10.0.1.0/24", 244)
-  k3s_ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 234)
-
-  config = {
-    dev = {
-      server_count = 1,
-      agent_count  = 1,
-    }
-    prod = {
-      server_count = 3,
-      agent_count  = 3,
-    }
+  # Generate "Sticky" maps for the Recycle Method
+  server_map = {
+    for i in range(local.cluster_config[var.cloud_env].server_count) :
+    format("${local.prefix}-k3s-sv-%02d", i + 1) => cidrhost("10.0.1.0/24", i + 21)
   }
-  env = local.config[var.cloud_env]
 
-  nat_user_data = templatefile("${path.module}/templates/cloud-init-nat.yaml", {
-    tailscale_auth_nat_key = var.tailscale_auth_nat_key
-    hostname               = "${local.prefix}-nat"
-  })
+  agent_map = {
+    for i in range(local.cluster_config[var.cloud_env].agent_count) :
+    format("${local.prefix}-k3s-ag-%02d", i + 1) => cidrhost("10.0.1.0/24", i + 31)
+  }
+
+  # Split the first server out for cluster-init
+  init_server_name = format("${local.prefix}-k3s-sv-%02d", 1)
+  join_servers     = { for k, v in local.server_map : k => v if k != local.init_server_name }
 
   manifest_injector_script = join("\n", [
     for filename, content in module.k3s_manifests.rendered_manifests :
@@ -90,8 +95,8 @@ locals {
   ])
 }
 
-# DATA SOURCES
-data "hcloud_image" "nat-gateway" {
+# --- DATA SOURCES ---
+data "hcloud_image" "nat_gateway" {
   with_selector = "role=nat-gateway,location=${var.location}"
   most_recent   = true
 }
@@ -105,7 +110,7 @@ data "hcloud_ssh_key" "admin" {
   name = var.ssh_key_name
 }
 
-# NETWORK INFRASTRUCTURE
+# --- NETWORK ---
 resource "hcloud_network" "main" {
   name     = "${local.prefix}-vnet"
   ip_range = "10.0.0.0/16"
@@ -119,9 +124,8 @@ resource "hcloud_network_subnet" "k3s_nodes" {
 }
 
 resource "hcloud_server" "nat" {
-  name = "${local.prefix}-nat"
-  # image = data.hcloud_image.ubuntu.id
-  image       = data.hcloud_image.nat-gateway.id
+  name        = "${local.prefix}-nat"
+  image       = data.hcloud_image.nat_gateway.id
   server_type = var.nat_gateway_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
@@ -137,13 +141,15 @@ resource "hcloud_server" "nat" {
     ip         = local.nat_server_ip
   }
 
-  user_data  = local.nat_user_data
-  depends_on = [hcloud_network_subnet.k3s_nodes]
+  user_data = templatefile("${path.module}/templates/cloud-init-nat.yaml", {
+    tailscale_auth_nat_key = var.tailscale_auth_nat_key
+    hostname               = "${local.prefix}-nat"
+  })
 }
 
 resource "time_sleep" "wait_for_nat_config" {
   depends_on      = [hcloud_server.nat]
-  create_duration = "120s"
+  create_duration = "60s"
 }
 
 resource "hcloud_network_route" "default_route" {
@@ -153,7 +159,7 @@ resource "hcloud_network_route" "default_route" {
   depends_on  = [time_sleep.wait_for_nat_config]
 }
 
-# LOAD BALANCERS
+# --- LOAD BALANCERS ---
 resource "hcloud_load_balancer" "api" {
   name               = "${local.prefix}-lb-api"
   load_balancer_type = var.load_balancer_type
@@ -164,7 +170,6 @@ resource "hcloud_load_balancer_network" "api_net" {
   load_balancer_id = hcloud_load_balancer.api.id
   network_id       = hcloud_network.main.id
   ip               = local.k3s_api_load_balancer_ip
-  depends_on       = [hcloud_network_subnet.k3s_nodes]
 }
 
 resource "hcloud_load_balancer_service" "k3s_api" {
@@ -172,13 +177,6 @@ resource "hcloud_load_balancer_service" "k3s_api" {
   protocol         = "tcp"
   listen_port      = 6443
   destination_port = 6443
-  health_check {
-    protocol = "tcp"
-    port     = 6443
-    interval = 10
-    timeout  = 5
-    retries  = 3
-  }
 }
 
 resource "hcloud_load_balancer" "ingress" {
@@ -191,69 +189,32 @@ resource "hcloud_load_balancer_network" "ingress_net" {
   load_balancer_id = hcloud_load_balancer.ingress.id
   ip               = local.k3s_ingress_load_balancer_ip
   network_id       = hcloud_network.main.id
-  depends_on       = [hcloud_network_subnet.k3s_nodes]
 }
 
-resource "hcloud_load_balancer_service" "http" {
-  load_balancer_id = hcloud_load_balancer.ingress.id
-  protocol         = "tcp"
-  listen_port      = 80
-  destination_port = 80
-  proxyprotocol    = true
-  health_check {
-    protocol = "tcp"
-    port     = 80
-    interval = 10
-    timeout  = 5
-    retries  = 3
-  }
-}
-
-resource "hcloud_load_balancer_service" "https" {
-  load_balancer_id = hcloud_load_balancer.ingress.id
-  protocol         = "tcp"
-  listen_port      = 443
-  destination_port = 443
-  proxyprotocol    = true
-  health_check {
-    protocol = "tcp"
-    port     = 443
-    interval = 10
-    timeout  = 5
-    retries  = 3
-  }
-}
-
-# CLUSTER TOKENS
+# --- K3S MODULE & TOKENS ---
 resource "random_password" "k3s_token" {
   length  = 64
   special = false
 }
 
-# MANIFEST FACTORY: Get K8s Manifests from the Universal Module
 module "k3s_manifests" {
-  source = "../../modules/k3s_node"
-
-  cloud_provider_name  = "hcloud"
-  cloud_provider_mtu   = 1450
-  k3s_load_balancer_ip = local.k3s_api_load_balancer_ip
-
-  # Universal Versions
+  source                = "../../modules/k3s_node"
+  cloud_provider_name   = "hcloud"
+  cloud_provider_mtu    = var.hcloud_mtu
+  k3s_load_balancer_ip  = local.k3s_api_load_balancer_ip
   cilium_version        = var.cilium_version
   ingress_nginx_version = var.ingress_nginx_version
   argocd_version        = var.argocd_version
   git_repo_url          = var.git_repo_url
-
-  # Hetzner Specific Injections
-  token               = var.token
-  hcloud_network_name = hcloud_network.main.name
-  ccm_version         = var.ccm_version
-  csi_version         = var.csi_version
+  token                 = var.token
+  hcloud_network_name   = hcloud_network.main.name
+  ccm_version           = var.ccm_version
+  csi_version           = var.csi_version
 }
 
-# PHASE 1: CONTROL PLANE INIT (The first server that creates the cluster)
+# --- PHASE 1: CONTROL PLANE INIT ---
 resource "hcloud_server" "control_plane_init" {
-  name        = format("${local.prefix}-k3s-sv-%02d", 1)
+  name        = local.init_server_name
   image       = data.hcloud_image.k3s_node.id
   server_type = var.k3s_server_type
   location    = var.location
@@ -266,14 +227,11 @@ resource "hcloud_server" "control_plane_init" {
 
   network {
     network_id = hcloud_network.main.id
-    ip         = cidrhost("10.0.1.0/24", 2)
+    ip         = local.server_map[local.init_server_name]
   }
 
-
-  labels = { cluster = local.prefix, role = "server" }
-
   user_data = templatefile("${path.module}/templates/cloud-init-server.yaml", {
-    hostname                      = format("${local.prefix}-k3s-sv-%02d", 1)
+    hostname                      = local.init_server_name
     k3s_token                     = random_password.k3s_token.result
     k3s_load_balancer_ip          = local.k3s_api_load_balancer_ip
     k3s_cluster_setting           = "cluster-init: true"
@@ -283,13 +241,11 @@ resource "hcloud_server" "control_plane_init" {
     etcd_s3_endpoint              = var.etcd_s3_endpoint
     network_gateway               = local.nat_server_ip
     tailscale_auth_k3s_server_key = var.tailscale_auth_k3s_server_key
-
-    manifest_injector_script = local.manifest_injector_script
+    manifest_injector_script      = local.manifest_injector_script
   })
 
-  depends_on = [hcloud_network_route.default_route, time_sleep.wait_for_nat_config]
+  depends_on = [hcloud_network_route.default_route]
 }
-
 
 resource "hcloud_load_balancer_target" "api_target_init" {
   type             = "server"
@@ -298,15 +254,10 @@ resource "hcloud_load_balancer_target" "api_target_init" {
   use_private_ip   = true
 }
 
-resource "time_sleep" "wait_for_init_node" {
-  depends_on      = [hcloud_server.control_plane_init, hcloud_load_balancer_target.api_target_init]
-  create_duration = "120s"
-}
-
-# PHASE 2: CONTROL PLANE JOIN (Additional servers for High Availability)
+# --- PHASE 2: CONTROL PLANE JOIN (RECYCLE READY) ---
 resource "hcloud_server" "control_plane_join" {
-  count       = local.env.server_count > 1 ? local.env.server_count - 1 : 0
-  name        = format("${local.prefix}-k3s-sv-%02d", count.index + 2)
+  for_each    = local.join_servers
+  name        = each.key
   image       = data.hcloud_image.k3s_node.id
   server_type = var.k3s_server_type
   location    = var.location
@@ -319,13 +270,11 @@ resource "hcloud_server" "control_plane_join" {
 
   network {
     network_id = hcloud_network.main.id
-    ip         = cidrhost("10.0.1.0/24", count.index + 3)
+    ip         = each.value
   }
 
-  labels = { cluster = local.prefix, role = "server" }
-
   user_data = templatefile("${path.module}/templates/cloud-init-server.yaml", {
-    hostname                      = format("${local.prefix}-k3s-sv-%02d", count.index + 2)
+    hostname                      = each.key
     k3s_token                     = random_password.k3s_token.result
     k3s_load_balancer_ip          = local.k3s_api_load_balancer_ip
     k3s_cluster_setting           = "server: https://${local.k3s_api_load_balancer_ip}:6443"
@@ -338,21 +287,21 @@ resource "hcloud_server" "control_plane_join" {
     manifest_injector_script      = ""
   })
 
-  depends_on = [time_sleep.wait_for_init_node]
+  depends_on = [hcloud_server.control_plane_init]
 }
 
 resource "hcloud_load_balancer_target" "api_targets_join" {
-  count            = local.env.server_count > 1 ? local.env.server_count - 1 : 0
+  for_each         = hcloud_server.control_plane_join
   type             = "server"
   load_balancer_id = hcloud_load_balancer.api.id
-  server_id        = hcloud_server.control_plane_join[count.index].id
+  server_id        = each.value.id
   use_private_ip   = true
 }
 
-# PHASE 3: WORKER
+# --- PHASE 3: AGENTS (RECYCLE READY) ---
 resource "hcloud_server" "agent" {
-  count       = local.env.agent_count
-  name        = format("${local.prefix}-k3s-ag-%02d", count.index + 1)
+  for_each    = local.agent_map
+  name        = each.key
   image       = data.hcloud_image.k3s_node.id
   server_type = var.k3s_agent_type
   location    = var.location
@@ -365,27 +314,24 @@ resource "hcloud_server" "agent" {
 
   network {
     network_id = hcloud_network.main.id
-    ip         = cidrhost("10.0.1.0/24", count.index + 2 + local.env.server_count)
+    ip         = each.value
   }
 
-
-  labels = { cluster = local.prefix, role = "agent" }
-
   user_data = templatefile("${path.module}/templates/cloud-init-agent.yaml", {
-    hostname                     = format("${local.prefix}-k3s-ag-%02d", count.index + 1)
+    hostname                     = each.key
     k3s_token                    = random_password.k3s_token.result
     k3s_control_plane_url        = "${local.k3s_api_load_balancer_ip}:6443"
     tailscale_auth_k3s_agent_key = var.tailscale_auth_k3s_agent_key
     network_gateway              = local.nat_server_ip
   })
 
-  depends_on = [time_sleep.wait_for_init_node, hcloud_server.control_plane_join]
+  depends_on = [hcloud_server.control_plane_init]
 }
 
 resource "hcloud_load_balancer_target" "ingress_targets" {
-  count            = local.env.agent_count
+  for_each         = hcloud_server.agent
   type             = "server"
   load_balancer_id = hcloud_load_balancer.ingress.id
-  server_id        = hcloud_server.agent[count.index].id
+  server_id        = each.value.id
   use_private_ip   = true
 }

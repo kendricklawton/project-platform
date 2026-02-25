@@ -19,7 +19,7 @@ write_files:
                 via: 10.0.0.1
                 on-link: true
 
-  # 2. K3S REGISTRIES: Configured for local platform registry
+  # K3S REGISTRIES: Configured for local platform registry
   - path: /etc/rancher/k3s/registries.yaml
     permissions: "0644"
     content: |
@@ -28,7 +28,7 @@ write_files:
           endpoint:
             - "http://10.43.0.50:5000"
 
-  # 3. KUBERNETES AUDIT POLICY
+  # KUBERNETES AUDIT POLICY
   - path: /var/lib/rancher/k3s/server/audit.yaml
     permissions: "0600"
     content: |
@@ -37,7 +37,7 @@ write_files:
       rules:
       - level: Metadata
 
-  # 4. MANIFEST INJECTOR: Decoupled for cleaner bootstrap logic
+  # MANIFEST INJECTOR: Decoupled for cleaner bootstrap logic
   - path: /usr/local/bin/inject-manifests.sh
     permissions: "0700"
     owner: root:root
@@ -48,52 +48,91 @@ write_files:
       mkdir -p /var/lib/rancher/k3s/server/manifests
       ${indent(6, manifest_injector_script)}
 
-  # 5. OPTIMIZED SERVER BOOTSTRAP SCRIPT
+  # OPTIMIZED SERVER BOOTSTRAP SCRIPT
   - path: /usr/local/bin/k3s-start.sh
     permissions: "0700"
     owner: root:root
     content: |
       #!/bin/bash
-      set -e
+      set -euo pipefail
+      LOG="/var/log/k3s-bootstrap.log"
+      exec > >(tee -a "$LOG") 2>&1
+      echo "=== K3s Server Bootstrap Started at $(date) ==="
 
-      # ENSURE NETWORK CONNECTIVITY: Force internal routing to NAT and Metadata
+      # -------------------------------------------------------
+      # 1. CSI host paths — must exist BEFORE k3s starts
+      #    Fixes hcloud-csi-node CrashLoopBackOff where
+      #    node-driver-registrar can't mount plugin directories
+      # -------------------------------------------------------
+      echo "[Bootstrap] Ensuring CSI host paths exist..."
+      mkdir -p /var/lib/rancher/k3s/agent/kubelet/plugins_registry
+      mkdir -p /var/lib/rancher/k3s/agent/kubelet/plugins
+      chmod 755 /var/lib/rancher/k3s/agent/kubelet/plugins_registry
+      chmod 755 /var/lib/rancher/k3s/agent/kubelet/plugins
+
+      # -------------------------------------------------------
+      # 2. SDN routing — metadata + default via NAT gateway
+      # -------------------------------------------------------
       echo "[Bootstrap] Ensuring SDN routing paths..."
-      ip route add 169.254.169.254 via 10.0.0.1 dev $(ip -4 route show to default | awk '{print $5}') onlink || true
-      ip route add default via 10.0.0.1 dev $(ip -4 route show to default | awk '{print $5}') onlink || true
+      DEFAULT_DEV=$(ip -4 route show to default | awk '{print $5}' | head -1)
+      if [ -n "$DEFAULT_DEV" ]; then
+        ip route replace 169.254.169.254 via 10.0.0.1 dev "$DEFAULT_DEV" onlink || true
+        ip route replace default via 10.0.0.1 dev "$DEFAULT_DEV" onlink || true
+      else
+        echo "[WARN] No default route device found, skipping route setup"
+      fi
 
+      # -------------------------------------------------------
+      # 3. Inject cluster manifests (Cilium, HCCM, CSI, etc.)
+      # -------------------------------------------------------
       echo "[Bootstrap] Injecting Cluster Manifests..."
       /usr/local/bin/inject-manifests.sh
 
-      echo "[Bootstrap] Waiting for Internet and Metadata services..."
-      for i in {1..30}; do
-        if curl -s -m 2 http://169.254.169.254/hetzner/v1/metadata/instance-id >/dev/null; then break; fi
-        echo "Waiting for Hetzner Metadata API..."
+      # -------------------------------------------------------
+      # 4. Wait for Hetzner metadata service
+      # -------------------------------------------------------
+      echo "[Bootstrap] Waiting for Hetzner metadata service..."
+      HCLOUD_ID=""
+      for i in $(seq 1 30); do
+        HCLOUD_ID=$(curl -sf -m 3 http://169.254.169.254/hetzner/v1/metadata/instance-id 2>/dev/null || true)
+        if [ -n "$HCLOUD_ID" ]; then
+          echo "[Bootstrap] Hetzner instance ID: $HCLOUD_ID"
+          break
+        fi
+        if [ "$i" -eq 30 ]; then
+          echo "[ERROR] Metadata service unreachable after 60s — proceeding without instance ID"
+        fi
         sleep 2
       done
 
-      HCLOUD_ID=$(curl -s http://169.254.169.254/hetzner/v1/metadata/instance-id)
-      if [ -z "$HCLOUD_ID" ]; then
-        echo "CRITICAL: Metadata service unreachable."
-        exit 1
-      fi
-
+      # -------------------------------------------------------
+      # 5. Wait for Tailscale IP to be available
+      # -------------------------------------------------------
       echo "[Bootstrap] Waiting for Tailscale IP..."
-      for i in {1..30}; do
+      TS_IP=""
+      for i in $(seq 1 30); do
         TS_IP=$(tailscale ip -4 2>/dev/null || true)
-        if [ -n "$TS_IP" ]; then break; fi
-        sleep 2
+        if [ -n "$TS_IP" ]; then
+          echo "[Bootstrap] Tailscale IP acquired: $TS_IP"
+          break
+        fi
+        echo "[Bootstrap] Tailscale not ready yet (attempt $i/30)..."
+        sleep 5
       done
-
       if [ -z "$TS_IP" ]; then
-        echo "CRITICAL: Tailscale IP timeout."
-        exit 1
+        echo "[WARN] Tailscale IP not available — tls-san and node-external-ip will be incomplete"
       fi
 
-      echo "[Bootstrap] Generating K3s Node Configuration..."
+      # -------------------------------------------------------
+      # 6. Generate K3s server config
+      # -------------------------------------------------------
+      NODE_IP=$(hostname -I | awk '{print $1}')
+      echo "[Bootstrap] Generating K3s Server Configuration..."
+      echo "[Bootstrap]   node-ip=$NODE_IP  node-external-ip=$TS_IP  hcloud-id=$HCLOUD_ID"
       mkdir -p /etc/rancher/k3s
       cat > /etc/rancher/k3s/config.yaml <<EOF
       token: ${k3s_token}
-      node-ip: $(hostname -I | awk '{print $1}')
+      node-ip: $NODE_IP
       node-external-ip: $TS_IP
       tls-san:
         - ${hostname}
@@ -111,8 +150,6 @@ write_files:
       etcd-s3-access-key: ${etcd_s3_access_key}
       etcd-s3-secret-key: ${etcd_s3_secret_key}
       etcd-s3-bucket: ${etcd_s3_bucket}
-      etcd-snapshot-schedule-cron: "0 */6 * * *"
-      etcd-snapshot-retention: 10
       kubelet-arg:
         - "cloud-provider=external"
         - "provider-id=hcloud://$HCLOUD_ID"
@@ -121,49 +158,63 @@ write_files:
       ${k3s_cluster_setting}
       EOF
 
-      echo "[Bootstrap] Initializing K3s Service..."
-      systemctl stop k3s || true
-      fuser -k 10258/tcp || true
-      systemctl enable k3s
-      systemctl restart k3s
+      # -------------------------------------------------------
+      # 7. Clean stop, then start k3s
+      #    Use a proper stop + wait instead of fuser hacks
+      # -------------------------------------------------------
+      echo "[Bootstrap] Ensuring k3s is fully stopped before starting..."
+      systemctl stop k3s 2>/dev/null || true
 
-      echo "[Bootstrap] Monitoring Node Registration..."
-      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-      for i in {1..60}; do
-        if kubectl get node ${hostname} >/dev/null 2>&1; then
-          echo "Node ${hostname} registered successfully."
+      # Wait for k3s to fully release its ports
+      for i in $(seq 1 15); do
+        if ! ss -tlnp | grep -qE ':(6443|10250|10258) '; then
+          echo "[Bootstrap] All k3s ports released"
           break
+        fi
+        echo "[Bootstrap] Waiting for k3s ports to release (attempt $i/15)..."
+        sleep 2
+      done
+
+      echo "[Bootstrap] Starting k3s server..."
+      systemctl daemon-reload
+      systemctl enable k3s
+      systemctl start k3s
+
+      # -------------------------------------------------------
+      # 8. Verify server is healthy
+      # -------------------------------------------------------
+      echo "[Bootstrap] Waiting for k3s API server to become healthy..."
+      for i in $(seq 1 60); do
+        if curl -sf -m 3 -o /dev/null -k https://127.0.0.1:6443/ping 2>/dev/null; then
+          echo "=== K3s Server Bootstrap Complete — API server is healthy ==="
+          exit 0
         fi
         sleep 5
       done
-      echo "=== K3s Server Bootstrap Complete ==="
+      echo "[ERROR] K3s API server did not become healthy within 5 minutes"
+      journalctl -u k3s --no-pager --since "5min ago" | tail -50
+      exit 1
 
 runcmd:
-  # 1. Network Initialization
   - netplan generate
   - netplan apply
   - sleep 5
   - systemctl restart systemd-resolved || true
 
-  # 2. Tailscale Join: Optimized with socket check and exponential backoff logic
+  # Join Tailscale — wait for socket, then retry until successful
   - |
     LOG="/var/log/tailscale-join.log"
-    echo "Starting Tailscale join..." > $LOG
-    for i in $(seq 1 10); do
-      if [ -S /run/tailscale/tailscaled.sock ]; then break; fi
-      echo "Waiting for tailscaled socket..." >> $LOG
-      sleep 3
-    done
-
-    until tailscale up \
-      --authkey=${tailscale_auth_k3s_server_key} \
-      --ssh \
-      --hostname=${hostname} \
-      --advertise-tags="tag:k3s-server" \
-      --reset >> $LOG 2>&1; do
-      echo "Tailscale up failed, retrying in 5s..." >> $LOG
+    echo "Waiting for tailscaled socket..." >> $LOG
+    for i in $(seq 1 24); do
+      [ -S /run/tailscale/tailscaled.sock ] && break
       sleep 5
     done
+    echo "tailscaled socket ready, joining..." >> $LOG
+    until tailscale up \
+      --authkey=${tailscale_auth_k3s_server_key} \
+      --ssh --hostname=${hostname} --advertise-tags="tag:k3s-server" --reset >> $LOG 2>&1; do
+      sleep 5
+    done
+    echo "Tailscale joined successfully" >> $LOG
 
-  # 3. Final K3s Initialization
   - /usr/local/bin/k3s-start.sh

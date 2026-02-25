@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"github.com/kendricklawton/project-platform/core/internal/authctx"
 	"github.com/kendricklawton/project-platform/core/internal/db"
 	pb "github.com/kendricklawton/project-platform/gen/go/platform/v1"
 )
@@ -24,8 +26,11 @@ func (s *TeamServer) CreateTeam(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// TODO: Replace with real auth context retrieval
-	creatorID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	// Extract the actual authenticated user from the context
+	creatorID, ok := authctx.GetUserID(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("missing user identity"))
+	}
 
 	var team db.Team
 
@@ -52,6 +57,11 @@ func (s *TeamServer) CreateTeam(
 	})
 
 	if err != nil {
+		// If it's a known Postgres unique constraint error (SQLSTATE 23505)
+		if strings.Contains(err.Error(), "SQLSTATE 23505") {
+			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("team slug '%s' is already taken", req.Msg.Slug))
+		}
+		// Otherwise, it's a real 500 error
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create team: %w", err))
 	}
 

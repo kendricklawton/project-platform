@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
-	"github.com/kendricklawton/project-platform/core/internal/api"
+	"github.com/kendricklawton/project-platform/core/internal/authctx"
 	"github.com/kendricklawton/project-platform/core/internal/db"
 	pb "github.com/kendricklawton/project-platform/gen/go/platform/v1"
 )
@@ -19,7 +19,7 @@ func (s *UserServer) GetMe(
 ) (*connect.Response[pb.GetMeResponse], error) {
 
 	// Extract UserID from context (injected by your AuthMiddleware)
-	userID, ok := api.GetUserID(ctx)
+	userID, ok := authctx.GetUserID(ctx)
 	if !ok {
 		// The context didn't have a UUID! Kick them out.
 		return nil, connect.NewError(connect.CodeUnauthenticated, nil)
