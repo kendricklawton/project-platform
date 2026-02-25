@@ -200,7 +200,7 @@ resource "random_password" "k3s_token" {
 module "k3s_manifests" {
   source                = "../../modules/k3s_node"
   cloud_provider_name   = "hcloud"
-  cloud_provider_mtu    = var.hcloud_mtu
+  cloud_provider_mtu    = 1450
   k3s_load_balancer_ip  = local.k3s_api_load_balancer_ip
   cilium_version        = var.cilium_version
   ingress_nginx_version = var.ingress_nginx_version
@@ -334,4 +334,36 @@ resource "hcloud_load_balancer_target" "ingress_targets" {
   load_balancer_id = hcloud_load_balancer.ingress.id
   server_id        = each.value.id
   use_private_ip   = true
+}
+
+resource "hcloud_load_balancer_service" "ingress_http" {
+  load_balancer_id = hcloud_load_balancer.ingress.id
+  protocol         = "tcp"
+  listen_port      = 80
+  destination_port = 80
+  proxyprotocol    = true
+
+  health_check {
+    protocol = "tcp"
+    port     = 80
+    interval = 10
+    timeout  = 5
+    retries  = 3
+  }
+}
+
+resource "hcloud_load_balancer_service" "ingress_https" {
+  load_balancer_id = hcloud_load_balancer.ingress.id
+  protocol         = "tcp"
+  listen_port      = 443
+  destination_port = 443
+  proxyprotocol    = true
+
+  health_check {
+    protocol = "tcp"
+    port     = 443
+    interval = 10
+    timeout  = 5
+    retries  = 3
+  }
 }

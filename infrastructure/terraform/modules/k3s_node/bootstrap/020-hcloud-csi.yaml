@@ -10,4 +10,4 @@ spec:
   version: "${CSIVersion}"
   bootstrap: true
   set:
-    node.kubeletDir: "/var/lib/kubelet"
+    node.kubeletDir: "/var/lib/rancher/k3s/agent/kubelet"
