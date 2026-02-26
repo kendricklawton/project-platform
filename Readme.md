@@ -13,7 +13,7 @@ Project Platform is an experimental project where we are exploring how to build 
 - **Serverless Patterns:** Experimenting with Knative for "scale to zero" and event-driven architectures.
 - **Infrastructure as Code:** Practicing with Terraform, Packer, and Task to manage complex setups.
 - **Security Sandboxing:** Learning about gVisor, KubeArmor, and Kyverno for hardening workloads.
-- **Observability:** Setting up and tuning the VictoriaMetrics and Loki stack.
+- **Observability:** Setting up and tuning the VictoriaMetrics, Loki, Grafana, and Fluent Bit stack.
 - **GitOps:** ArgoCD for declarative application management.
 
 ## 🛠 Experimental Stack
@@ -23,15 +23,16 @@ This stack represents what we are currently playing with:
 ### Backend & API
 - **Language:** Go 1.22+
 - **Build Tools:** [ko](https://github.com/ko-build/ko) and Docker
-- **Routing:** [chi](https://github.com/go-chi/chi) (v5)
+- **API Framework:** [ConnectRPC](https://connectrpc.com/docs/go/) (Protobuf)
 - **Database:** PostgreSQL (CloudNativePG)
 - **Auth:** WorkOS (OIDC)
 
 ### Infrastructure
-- **Orchestration:** K3s
+- **Orchestration:** Talos Linux
 - **Provisioning:** Terraform & Packer
-- **Providers:** Hetzner Cloud & DigitalOcean
+- **Providers:** Hetzner (Bare Metal)
 - **Serverless:** Knative Serving & Eventing
+- **GitOps:** ArgoCD
 - **Security:** gVisor, KubeArmor, Kyverno
 - **Networking:** Cilium & NATS
 
@@ -72,8 +73,7 @@ If you want to poke around the project:
 
 4. **Run the API:**
    ```bash
-   cd core/cmd/platform-api
-   go run main.go
+   task dev:api
    ```
 
 ## 📖 Notes

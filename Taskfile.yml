@@ -25,6 +25,7 @@ vars:
   CILIUM_VERSION: "1.15.1"
   CNPG_VERSION: "1.28.1"
   INGRESS_NGINX_VERSION: "4.14.3"
+  SEALED_SECRETS_VERSION: "2.18.1"
   CERT_MANAGER_VERSION: "v1.14.0"
   NATS_VERSION: "2.10.12"
   KUBEARMOR_VERSION: "1.3.1"
@@ -137,6 +138,7 @@ tasks:
       TF_VAR_csi_version: "{{.CSI_VERSION}}"
       TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
       TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
+      TF_VAR_sealed_secrets_version: "{{.SEALED_SECRETS_VERSION}}"
       TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
 
     cmds:
@@ -188,17 +190,6 @@ tasks:
           CMD: "output"
           ARGS: ""
 
-  hz:kubeconfig:
-    desc: "Write Hetzner Kubeconfig to disk"
-    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/hetzner"
-    env:
-      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-dev.json"
-    cmds:
-      - mkdir -p ~/.kube
-      - terraform output -raw kubeconfig > ~/.kube/config
-      - chmod 600 ~/.kube/config
-      - echo "✅ Kubeconfig successfully written to ~/.kube/config"
-
   do:plan:
     desc: "Plan DigitalOcean NYC3 (Dev)"
     cmds:
@@ -243,16 +234,33 @@ tasks:
           CMD: "output"
           ARGS: ""
 
-  do:kubeconfig:
-    desc: "Write DigitalOcean Kubeconfig to disk"
-    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/digitalocean"
-    env:
-      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-dev.json"
+  cluster:seal:
+    desc: "Create and seal a secret via SSH without local kubectl or kubeseal"
+    requires:
+      vars: [TENANT, NAME, KEY, VAL]
+    vars:
+      CP_HOSTNAME:
+        # We cd into the folder just for this variable evaluation so we don't change the task's working directory
+        sh: cd infrastructure/terraform/providers/hetzner && terraform output -raw control_plane_init_hostname
     cmds:
-      - mkdir -p ~/.kube
-      - terraform output -raw kubeconfig > ~/.kube/config
-      - chmod 600 ~/.kube/config
-      - echo "✅ Kubeconfig successfully written to ~/.kube/config"
+      - mkdir -p tenants/{{.TENANT}}
+      # Run kubectl & kubeseal on the remote server, but save the YAML output to your local machine
+      - >-
+        ssh root@{{.CP_HOSTNAME}} "
+        export KUBECONFIG=/etc/rancher/k3s/k3s.yaml;
+
+        if ! command -v kubeseal >/dev/null 2>&1; then
+          echo '⬇️ Installing kubeseal on remote server...' >&2;
+          wget -qO kubeseal.tar.gz https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.27.1/kubeseal-0.27.1-linux-amd64.tar.gz;
+          tar -xzf kubeseal.tar.gz kubeseal;
+          mv kubeseal /usr/local/bin/kubeseal;
+          rm kubeseal.tar.gz;
+        fi;
+
+        kubectl create secret generic {{.NAME}} -n {{.TENANT}} --from-literal={{.KEY}}='{{.VAL}}' --dry-run=client -o yaml |
+        kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system -o yaml
+        " > tenants/{{.TENANT}}/{{.NAME}}-secret.yaml
+      - echo "✅ Sealed secret saved locally to tenants/{{.TENANT}}/{{.NAME}}-secret.yaml"
 
   # ===========================================================================
   # DEVELOPMENT & CODE GENERATION
@@ -330,8 +338,11 @@ tasks:
     cmds:
       - go run github.com/air-verse/air@latest -c .air.worker.toml
 
-  web:dev:
-    desc: "Run the frontend dashboard"
-    dir: web
+  dev:web:
+    desc: "Run the Go+HTMX Backend-for-Frontend (BFF)"
+    dir: core
     cmds:
-      - npm run dev
+      - |
+        templ generate --watch & \
+        tailwindcss -i ./internal/ui/static/input.css -o ./internal/ui/static/styles.css --watch & \
+        go run github.com/air-verse/air@latest -c .air.web.toml
