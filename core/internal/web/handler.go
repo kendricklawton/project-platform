@@ -98,8 +98,6 @@ func (h *Handler) Routes() chi.Router {
 							<p class="text-xs font-mono text-green-600 dark:text-green-400 tracking-widest uppercase mb-12">
 								SYSTEMS_READY
 							</p>
-
-
 							<button hx-get="/dashboard" hx-target="#main-content" hx-push-url="true" class="px-8 py-3 border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-mono tracking-widest hover:bg-zinc-200 dark:hover:bg-zinc-900 hover:text-black dark:hover:text-white transition-colors duration-300 cursor-pointer">
 								ENTER_WORKSPACE
 							</button>

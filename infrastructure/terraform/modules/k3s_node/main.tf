@@ -68,12 +68,12 @@ locals {
     "130-sealed-secrets.yaml" = templatefile("${path.module}/bootstrap/130-sealed-secrets.yaml", {
       SealedSecretsVersion = var.sealed_secrets_version
     })
-    # "140-agrocd.yaml" = templatefile("${path.module}/bootstrap/130-agrocd.yaml", {
-    #   ArgoCDVersion = var.argocd_version
-    # })
-    # "150-root-app.yaml" = templatefile("${path.module}/bootstrap/140-root-app.yaml", {
-    #   GitRepoURL = var.git_repo_url
-    # })
+    "140-agrocd.yaml" = templatefile("${path.module}/bootstrap/140-agrocd.yaml", {
+      ArgoCDVersion = var.argocd_version
+    })
+    "150-root-app.yaml" = templatefile("${path.module}/bootstrap/150-root-app.yaml", {
+      GitRepoURL = var.git_repo_url
+    })
   }
 
   hcloud_manifests = var.cloud_provider_name == "hcloud" ? {
