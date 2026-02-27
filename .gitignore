@@ -100,4 +100,4 @@ PLATFORM.md
 infra/packer/.plugins
 SCRATCHPAD.md
 
-tmp
+tmp/web
