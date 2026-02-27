@@ -14,7 +14,7 @@ Project Platform is an experimental project where we are exploring how to build 
 - **Infrastructure as Code:** Practicing with Terraform, Packer, and Task to manage complex setups.
 - **Security Sandboxing:** Learning about gVisor, KubeArmor, and Kyverno for hardening workloads.
 - **Observability:** Setting up and tuning the VictoriaMetrics, Loki, Grafana, and Fluent Bit stack.
-- **GitOps:** ArgoCD for declarative application management.
+- **GitOps:** ArgoCD and Sealed Secrets for secure declarative application management.
 
 ## 🛠 Experimental Stack
 
@@ -22,13 +22,19 @@ This stack represents what we are currently playing with:
 
 ### Backend & API
 - **Language:** Go 1.22+
-- **Build Tools:** [ko](https://github.com/ko-build/ko) and Docker
+- **Build Tools:** [ko](https://github.com/ko-build/ko),Docker, & Potential Buildpacks
 - **API Framework:** [ConnectRPC](https://connectrpc.com/docs/go/) (Protobuf)
 - **Database:** PostgreSQL (CloudNativePG)
 - **Auth:** WorkOS (OIDC)
 
+### Frontend
+- **Markup:** Go + [HTMX](https://htmx.org/)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **Interactivity:** [Alpine.js](https://alpinejs.dev/)
+
 ### Infrastructure
-- **Orchestration:** Talos Linux
+- **Operating System:** Ubuntu Linux
+- **Orchestration:** K3s
 - **Provisioning:** Terraform & Packer
 - **Providers:** Hetzner (Bare Metal)
 - **Serverless:** Knative Serving & Eventing
@@ -40,17 +46,17 @@ This stack represents what we are currently playing with:
 
 ```text
 .
-├── core/                # Go API & CLI Logic
+├── core/                # Go API, BFF (HTMX), & CLI Logic
 │   ├── cmd/             # Entry points
 │   ├── internal/        # Private application code
+│   ├── migrations/      # Database migrations
 │   └── pkg/             # SDK experiments
-├── database/            # Migrations & SQLC
-├── infra/               # IaC experiments
+├── infrastructure/      # IaC experiments
 │   ├── packer/          # Image builds
-│   ├── platform/        # Kubernetes manifests
+│   ├── argocd/          # Kubernetes manifests
 │   └── terraform/       # Cloud resources
-├── web/                 # Next.js
-└── Runbook.md           # Operational notes
+├── proto/               # Protobuf definitions
+└── RUNBOOK.md           # Operational notes
 ```
 
 ## 🚀 Running Locally
@@ -77,7 +83,7 @@ If you want to poke around the project:
    ```
 
 ## 📖 Notes
-- See [Runbook.md](./Runbook.md) for how we are thinking about operating this.
+- See [RUNBOOK.md](./RUNBOOK.md) for how we are thinking about operating this.
 - This project is a messy work-in-progress—expect things to break!
 
 ---

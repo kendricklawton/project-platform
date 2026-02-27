@@ -2,8 +2,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  # Compile the API and place the binary in the tmp folder
-  cmd = "go build -o ./tmp/api ./cmd/worker/main.go"
+  # Compile the Worker and place the binary in the tmp folder
+  cmd = "go build -o ./tmp/worker ./cmd/platform-worker/main.go"
   # Run the compiled binary
   bin = "./tmp/worker"
   # Watch these file extensions for changes

@@ -2,8 +2,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  # Compile the API and place the binary in the tmp folder
-  cmd = "go build -o ./tmp/api ./cmd/streamer/main.go"
+  # Compile the Streamer and place the binary in the tmp folder
+  cmd = "go build -o ./tmp/streamer ./cmd/platform-streamer/main.go"
   # Run the compiled binary
   bin = "./tmp/streamer"
   # Watch these file extensions for changes

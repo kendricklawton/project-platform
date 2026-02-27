@@ -3,7 +3,7 @@ tmp_dir = "tmp"
 
 [build]
   # Compile the API and place the binary in the tmp folder
-  cmd = "go build -o ./tmp/api ./cmd/api/main.go"
+  cmd = "go build -o ./tmp/api ./cmd/platform-api/main.go"
   # Run the compiled binary
   bin = "./tmp/api"
   # Watch these file extensions for changes
