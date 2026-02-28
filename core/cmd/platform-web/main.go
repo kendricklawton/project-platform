@@ -11,7 +11,6 @@ import (
 func main() {
 	// The URL where your backend platform-api is running
 	apiURL := "http://localhost:8080"
-
 	apiClient := http.DefaultClient
 	userClient := platformv1connect.NewUserServiceClient(apiClient, apiURL)
 	teamClient := platformv1connect.NewTeamServiceClient(apiClient, apiURL)

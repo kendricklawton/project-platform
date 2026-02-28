@@ -19,7 +19,7 @@ type Server struct {
 	port       int
 }
 
-func New(cfg *config.Config, store db.Store, k8sClient *k8s.Client) *Server {
+func New(cfg *config.APIConfig, store db.Store, k8sClient *k8s.Client) *Server {
 	teamSvc := service.NewTeamServer(store)
 	userSvc := service.NewUserServer(store)
 	authSvc := service.NewAuthService(store)

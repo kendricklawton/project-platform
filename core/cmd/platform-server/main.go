@@ -12,7 +12,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadAPI()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
