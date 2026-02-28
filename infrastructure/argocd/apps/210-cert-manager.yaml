@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  labels:
+    # Consistency with your core-namespaces labeling strategy
+    platform.io/managed-by: argocd
+  annotations:
+    # Deploys in Wave 1, immediately after Namespaces (Wave 0) are healthy
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: "https://charts.jetstack.io"
+    chart: cert-manager
+    targetRevision: v1.14.4
+    helm:
+      parameters:
+        - name: installCRDs
+          value: "true"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Matches your root-app requirement for explicit namespace management
+      - CreateNamespace=false
+      # Essential for cert-manager to handle large CRD applications correctly
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
