@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cert-manager
+  name: kyverno
   namespace: argocd
   labels:
     platform.io/managed-by: argocd
@@ -10,16 +10,16 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: "https://charts.jetstack.io"
-    chart: cert-manager
-    targetRevision: v1.14.4
+    repoURL: "https://kyverno.github.io/kyverno/"
+    chart: kyverno
+    targetRevision: 3.1.4
     helm:
       parameters:
-        - name: installCRDs
+        - name: crds.migration.enabled
           value: "true"
   destination:
     server: "https://kubernetes.default.svc"
-    namespace: kube-system
+    namespace: kyverno
   syncPolicy:
     automated:
       prune: true
@@ -27,9 +27,3 @@ spec:
     syncOptions:
       - CreateNamespace=false
       - ServerSideApply=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m

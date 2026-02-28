@@ -7,45 +7,356 @@ package db
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addTeamMember = `-- name: AddTeamMember :exec
+const addDomain = `-- name: AddDomain :one
+
+INSERT INTO domains (id, project_id, domain)
+SELECT $1, $2, $3
+WHERE EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $2 AND tm.user_id = $4 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, project_id, domain, is_verified, verification_type, verification_token, tls_status, created_at, updated_at
+`
+
+type AddDomainParams struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Domain    string    `json:"domain"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+// ============================================================================
+// DOMAINS
+// ============================================================================
+func (q *Queries) AddDomain(ctx context.Context, arg AddDomainParams) (Domain, error) {
+	row := q.db.QueryRow(ctx, addDomain,
+		arg.ID,
+		arg.ProjectID,
+		arg.Domain,
+		arg.UserID,
+	)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Domain,
+		&i.IsVerified,
+		&i.VerificationType,
+		&i.VerificationToken,
+		&i.TlsStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const addTeamMember = `-- name: AddTeamMember :one
+
 INSERT INTO team_members (team_id, user_id, role)
-VALUES ($1, $2, $3)
+SELECT $1, $2, $3
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.team_id = $1 AND tm.user_id = $4 AND tm.role = 'owner'
+)
+RETURNING team_id, user_id, role, created_at
 `
 
 type AddTeamMemberParams struct {
-	TeamID uuid.UUID `json:"team_id"`
-	UserID uuid.UUID `json:"user_id"`
-	Role   string    `json:"role"`
+	TeamID   uuid.UUID `json:"team_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	Role     string    `json:"role"`
+	UserID_2 uuid.UUID `json:"user_id_2"`
 }
 
-func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) error {
-	_, err := q.db.ExecContext(ctx, addTeamMember, arg.TeamID, arg.UserID, arg.Role)
+// ============================================================================
+// TEAM MEMBERS
+// ============================================================================
+func (q *Queries) AddTeamMember(ctx context.Context, arg AddTeamMemberParams) (TeamMember, error) {
+	row := q.db.QueryRow(ctx, addTeamMember,
+		arg.TeamID,
+		arg.UserID,
+		arg.Role,
+		arg.UserID_2,
+	)
+	var i TeamMember
+	err := row.Scan(
+		&i.TeamID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const cancelDeployment = `-- name: CancelDeployment :one
+UPDATE deployments SET status = 'canceled'
+WHERE deployments.id = $1 AND deployments.status IN ('queued', 'building')
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = deployments.project_id AND tm.user_id = $2 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, project_id, environment, status, branch, commit_sha, commit_message, deployment_url, build_logs_uri, build_started_at, build_finished_at, deleted_at, created_at, updated_at
+`
+
+type CancelDeploymentParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) CancelDeployment(ctx context.Context, arg CancelDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, cancelDeployment, arg.ID, arg.UserID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.Status,
+		&i.Branch,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.DeploymentUrl,
+		&i.BuildLogsUri,
+		&i.BuildStartedAt,
+		&i.BuildFinishedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const countQueuedDeployments = `-- name: CountQueuedDeployments :one
+SELECT COUNT(*) FROM deployments
+WHERE status IN ('queued', 'building') AND deleted_at IS NULL
+`
+
+func (q *Queries) CountQueuedDeployments(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countQueuedDeployments)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTeamQueuedDeployments = `-- name: CountTeamQueuedDeployments :one
+SELECT COUNT(*) FROM deployments d
+JOIN projects p ON d.project_id = p.id
+WHERE p.team_id = $1 AND d.status IN ('queued', 'building') AND d.deleted_at IS NULL
+`
+
+func (q *Queries) CountTeamQueuedDeployments(ctx context.Context, teamID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countTeamQueuedDeployments, teamID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createAuditEntry = `-- name: CreateAuditEntry :exec
+
+INSERT INTO audit_log (id, team_id, actor_id, action, resource_type, resource_id, metadata, ip_address, user_agent, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type CreateAuditEntryParams struct {
+	ID           uuid.UUID          `json:"id"`
+	TeamID       uuid.UUID          `json:"team_id"`
+	ActorID      pgtype.UUID        `json:"actor_id"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   pgtype.UUID        `json:"resource_id"`
+	Metadata     []byte             `json:"metadata"`
+	IpAddress    *netip.Addr        `json:"ip_address"`
+	UserAgent    pgtype.Text        `json:"user_agent"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+func (q *Queries) CreateAuditEntry(ctx context.Context, arg CreateAuditEntryParams) error {
+	_, err := q.db.Exec(ctx, createAuditEntry,
+		arg.ID,
+		arg.TeamID,
+		arg.ActorID,
+		arg.Action,
+		arg.ResourceType,
+		arg.ResourceID,
+		arg.Metadata,
+		arg.IpAddress,
+		arg.UserAgent,
+		arg.CreatedAt,
+	)
 	return err
 }
 
-const createTeam = `-- name: CreateTeam :one
-INSERT INTO teams (id, name, slug)
-VALUES ($1, $2, $3)
-RETURNING id, name, slug, created_at, updated_at
+const createDeployment = `-- name: CreateDeployment :one
+
+INSERT INTO deployments (id, project_id, environment, branch, commit_sha, commit_message)
+SELECT $1, $2, $3, $4, $5, $6
+WHERE EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $2 AND tm.user_id = $7 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, project_id, environment, status, branch, commit_sha, commit_message, deployment_url, build_logs_uri, build_started_at, build_finished_at, deleted_at, created_at, updated_at
 `
 
-type CreateTeamParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
-	Slug string    `json:"slug"`
+type CreateDeploymentParams struct {
+	ID            uuid.UUID `json:"id"`
+	ProjectID     uuid.UUID `json:"project_id"`
+	Environment   string    `json:"environment"`
+	Branch        string    `json:"branch"`
+	CommitSha     string    `json:"commit_sha"`
+	CommitMessage string    `json:"commit_message"`
+	UserID        uuid.UUID `json:"user_id"`
 }
 
-func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error) {
-	row := q.db.QueryRowContext(ctx, createTeam, arg.ID, arg.Name, arg.Slug)
-	var i Team
+// ============================================================================
+// DEPLOYMENTS
+// ============================================================================
+func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, createDeployment,
+		arg.ID,
+		arg.ProjectID,
+		arg.Environment,
+		arg.Branch,
+		arg.CommitSha,
+		arg.CommitMessage,
+		arg.UserID,
+	)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.Status,
+		&i.Branch,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.DeploymentUrl,
+		&i.BuildLogsUri,
+		&i.BuildStartedAt,
+		&i.BuildFinishedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createProject = `-- name: CreateProject :one
+
+INSERT INTO projects (id, team_id, name, framework, repo_url, default_branch, root_directory, build_command, install_command, output_directory)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+WHERE EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.team_id = $2 AND tm.user_id = $11 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, team_id, name, framework, repo_url, default_branch, root_directory, build_command, install_command, output_directory, created_at, updated_at
+`
+
+type CreateProjectParams struct {
+	ID              uuid.UUID   `json:"id"`
+	TeamID          uuid.UUID   `json:"team_id"`
+	Name            string      `json:"name"`
+	Framework       string      `json:"framework"`
+	RepoUrl         string      `json:"repo_url"`
+	DefaultBranch   string      `json:"default_branch"`
+	RootDirectory   string      `json:"root_directory"`
+	BuildCommand    pgtype.Text `json:"build_command"`
+	InstallCommand  pgtype.Text `json:"install_command"`
+	OutputDirectory pgtype.Text `json:"output_directory"`
+	UserID          uuid.UUID   `json:"user_id"`
+}
+
+// ============================================================================
+// PROJECTS
+// ============================================================================
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, createProject,
+		arg.ID,
+		arg.TeamID,
+		arg.Name,
+		arg.Framework,
+		arg.RepoUrl,
+		arg.DefaultBranch,
+		arg.RootDirectory,
+		arg.BuildCommand,
+		arg.InstallCommand,
+		arg.OutputDirectory,
+		arg.UserID,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.Name,
+		&i.Framework,
+		&i.RepoUrl,
+		&i.DefaultBranch,
+		&i.RootDirectory,
+		&i.BuildCommand,
+		&i.InstallCommand,
+		&i.OutputDirectory,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createTeamWithOwner = `-- name: CreateTeamWithOwner :one
+
+WITH new_team AS (
+    INSERT INTO teams (id, name, slug) VALUES ($1, $2, $3) RETURNING id, name, slug, stripe_subscription_id, created_at, updated_at
+),
+new_member AS (
+    INSERT INTO team_members (team_id, user_id, role)
+    SELECT id, $4, 'owner' FROM new_team
+)
+SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM new_team
+`
+
+type CreateTeamWithOwnerParams struct {
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+	Slug   string    `json:"slug"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type CreateTeamWithOwnerRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	Name                 string             `json:"name"`
+	Slug                 string             `json:"slug"`
+	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ============================================================================
+// TEAMS
+// ============================================================================
+// Atomic CTE: Creates a team and immediately assigns the creator as the owner.
+// Bypasses the chicken-and-egg RBAC problem natively in Postgres.
+func (q *Queries) CreateTeamWithOwner(ctx context.Context, arg CreateTeamWithOwnerParams) (CreateTeamWithOwnerRow, error) {
+	row := q.db.QueryRow(ctx, createTeamWithOwner,
+		arg.ID,
+		arg.Name,
+		arg.Slug,
+		arg.UserID,
+	)
+	var i CreateTeamWithOwnerRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Slug,
+		&i.StripeSubscriptionID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,9 +364,9 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, email, name)
-VALUES ($1, $2, $3)
-RETURNING id, email, name, stripe_customer_id, tier, created_at, updated_at
+
+
+INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -64,13 +375,22 @@ type CreateUserParams struct {
 	Name  string    `json:"name"`
 }
 
+// ============================================================================
+// QUERIES: sqlc query definitions
+// Naming: sqlc conventions (:one, :many, :exec, :execrows, :copyfrom)
+// Auth pattern: WHERE EXISTS subquery for RBAC inline with mutations
+// ============================================================================
+// ============================================================================
+// USERS
+// ============================================================================
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.ID, arg.Email, arg.Name)
+	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.Email, arg.Name)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
 		&i.CreatedAt,
@@ -79,18 +399,654 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const createWebhook = `-- name: CreateWebhook :one
+
+INSERT INTO webhooks (id, project_id, provider, provider_install_id, hook_secret_encrypted, events)
+SELECT $1, $2, $3, $4, $5, $6
+WHERE EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $2 AND tm.user_id = $7 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, project_id, provider, provider_install_id, hook_secret_encrypted, events, is_active, created_at, updated_at
+`
+
+type CreateWebhookParams struct {
+	ID                  uuid.UUID `json:"id"`
+	ProjectID           uuid.UUID `json:"project_id"`
+	Provider            string    `json:"provider"`
+	ProviderInstallID   string    `json:"provider_install_id"`
+	HookSecretEncrypted []byte    `json:"hook_secret_encrypted"`
+	Events              []string  `json:"events"`
+	UserID              uuid.UUID `json:"user_id"`
+}
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error) {
+	row := q.db.QueryRow(ctx, createWebhook,
+		arg.ID,
+		arg.ProjectID,
+		arg.Provider,
+		arg.ProviderInstallID,
+		arg.HookSecretEncrypted,
+		arg.Events,
+		arg.UserID,
+	)
+	var i Webhook
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Provider,
+		&i.ProviderInstallID,
+		&i.HookSecretEncrypted,
+		&i.Events,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteDomain = `-- name: DeleteDomain :execrows
+DELETE FROM domains
+WHERE domains.id = $1
+AND EXISTS (
+    SELECT 1 FROM domains d
+    JOIN projects p ON d.project_id = p.id
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE d.id = domains.id AND tm.user_id = $2 AND tm.role IN ('owner', 'member')
+)
+`
+
+type DeleteDomainParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteDomain(ctx context.Context, arg DeleteDomainParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDomain, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteEnvVar = `-- name: DeleteEnvVar :execrows
+DELETE FROM project_env_vars
+WHERE project_id = $1 AND environment = $2 AND key_name = $3
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $1 AND tm.user_id = $4 AND tm.role IN ('owner', 'member')
+)
+`
+
+type DeleteEnvVarParams struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	Environment string    `json:"environment"`
+	KeyName     string    `json:"key_name"`
+	UserID      uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteEnvVar(ctx context.Context, arg DeleteEnvVarParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteEnvVar,
+		arg.ProjectID,
+		arg.Environment,
+		arg.KeyName,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteProject = `-- name: DeleteProject :execrows
+DELETE FROM projects
+WHERE projects.id = $1
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = projects.id AND tm.user_id = $2 AND tm.role = 'owner'
+)
+`
+
+type DeleteProjectParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteProject(ctx context.Context, arg DeleteProjectParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteProject, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteWebhook = `-- name: DeleteWebhook :execrows
+DELETE FROM webhooks
+WHERE webhooks.id = $1
+AND EXISTS (
+    SELECT 1 FROM webhooks w
+    JOIN projects p ON w.project_id = p.id
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE w.id = webhooks.id AND tm.user_id = $2 AND tm.role IN ('owner', 'member')
+)
+`
+
+type DeleteWebhookParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteWebhook(ctx context.Context, arg DeleteWebhookParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWebhook, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getBuildLogCount = `-- name: GetBuildLogCount :one
+SELECT COUNT(*) FROM build_log_lines WHERE deployment_id = $1
+`
+
+func (q *Queries) GetBuildLogCount(ctx context.Context, deploymentID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getBuildLogCount, deploymentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getBuildLogs = `-- name: GetBuildLogs :many
+SELECT line_number, content, stream, created_at
+FROM build_log_lines
+WHERE deployment_id = $1
+AND line_number > $2
+ORDER BY line_number
+LIMIT $3
+`
+
+type GetBuildLogsParams struct {
+	DeploymentID uuid.UUID `json:"deployment_id"`
+	LineNumber   int32     `json:"line_number"`
+	Limit        int32     `json:"limit"`
+}
+
+type GetBuildLogsRow struct {
+	LineNumber int32              `json:"line_number"`
+	Content    string             `json:"content"`
+	Stream     string             `json:"stream"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetBuildLogs(ctx context.Context, arg GetBuildLogsParams) ([]GetBuildLogsRow, error) {
+	rows, err := q.db.Query(ctx, getBuildLogs, arg.DeploymentID, arg.LineNumber, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetBuildLogsRow
+	for rows.Next() {
+		var i GetBuildLogsRow
+		if err := rows.Scan(
+			&i.LineNumber,
+			&i.Content,
+			&i.Stream,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDeployment = `-- name: GetDeployment :one
+SELECT d.id, d.project_id, d.environment, d.status, d.branch, d.commit_sha, d.commit_message, d.deployment_url, d.build_logs_uri, d.build_started_at, d.build_finished_at, d.deleted_at, d.created_at, d.updated_at FROM deployments d
+JOIN projects p ON d.project_id = p.id
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE d.id = $1 AND tm.user_id = $2 AND d.deleted_at IS NULL
+`
+
+type GetDeploymentParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetDeployment(ctx context.Context, arg GetDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, getDeployment, arg.ID, arg.UserID)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.Status,
+		&i.Branch,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.DeploymentUrl,
+		&i.BuildLogsUri,
+		&i.BuildStartedAt,
+		&i.BuildFinishedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getDomainByName = `-- name: GetDomainByName :one
+SELECT d.id, d.project_id, d.domain, d.is_verified, d.verification_type, d.verification_token, d.tls_status, d.created_at, d.updated_at, p.id AS project_id, p.team_id FROM domains d
+JOIN projects p ON d.project_id = p.id
+WHERE d.domain = $1 AND d.is_verified = true AND d.tls_status = 'active'
+`
+
+type GetDomainByNameRow struct {
+	ID                uuid.UUID          `json:"id"`
+	ProjectID         uuid.UUID          `json:"project_id"`
+	Domain            string             `json:"domain"`
+	IsVerified        bool               `json:"is_verified"`
+	VerificationType  string             `json:"verification_type"`
+	VerificationToken string             `json:"verification_token"`
+	TlsStatus         string             `json:"tls_status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ProjectID_2       uuid.UUID          `json:"project_id_2"`
+	TeamID            uuid.UUID          `json:"team_id"`
+}
+
+func (q *Queries) GetDomainByName(ctx context.Context, domain string) (GetDomainByNameRow, error) {
+	row := q.db.QueryRow(ctx, getDomainByName, domain)
+	var i GetDomainByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Domain,
+		&i.IsVerified,
+		&i.VerificationType,
+		&i.VerificationToken,
+		&i.TlsStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ProjectID_2,
+		&i.TeamID,
+	)
+	return i, err
+}
+
+const getEnvVarsForDeployment = `-- name: GetEnvVarsForDeployment :many
+SELECT key_name, encrypted_value, encrypted_data_key, encryption_iv, kms_key_id
+FROM project_env_vars
+WHERE project_id = $1 AND environment = $2
+`
+
+type GetEnvVarsForDeploymentParams struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	Environment string    `json:"environment"`
+}
+
+type GetEnvVarsForDeploymentRow struct {
+	KeyName          string `json:"key_name"`
+	EncryptedValue   []byte `json:"encrypted_value"`
+	EncryptedDataKey []byte `json:"encrypted_data_key"`
+	EncryptionIv     []byte `json:"encryption_iv"`
+	KmsKeyID         string `json:"kms_key_id"`
+}
+
+func (q *Queries) GetEnvVarsForDeployment(ctx context.Context, arg GetEnvVarsForDeploymentParams) ([]GetEnvVarsForDeploymentRow, error) {
+	rows, err := q.db.Query(ctx, getEnvVarsForDeployment, arg.ProjectID, arg.Environment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEnvVarsForDeploymentRow
+	for rows.Next() {
+		var i GetEnvVarsForDeploymentRow
+		if err := rows.Scan(
+			&i.KeyName,
+			&i.EncryptedValue,
+			&i.EncryptedDataKey,
+			&i.EncryptionIv,
+			&i.KmsKeyID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getLatestDeployment = `-- name: GetLatestDeployment :one
+SELECT id, project_id, environment, status, branch, commit_sha, commit_message, deployment_url, build_logs_uri, build_started_at, build_finished_at, deleted_at, created_at, updated_at FROM deployments
+WHERE project_id = $1 AND environment = $2 AND status = 'ready' AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestDeploymentParams struct {
+	ProjectID   uuid.UUID `json:"project_id"`
+	Environment string    `json:"environment"`
+}
+
+func (q *Queries) GetLatestDeployment(ctx context.Context, arg GetLatestDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, getLatestDeployment, arg.ProjectID, arg.Environment)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.Status,
+		&i.Branch,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.DeploymentUrl,
+		&i.BuildLogsUri,
+		&i.BuildStartedAt,
+		&i.BuildFinishedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getProject = `-- name: GetProject :one
+SELECT p.id, p.team_id, p.name, p.framework, p.repo_url, p.default_branch, p.root_directory, p.build_command, p.install_command, p.output_directory, p.created_at, p.updated_at FROM projects p
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE p.id = $1 AND tm.user_id = $2
+`
+
+type GetProjectParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, getProject, arg.ID, arg.UserID)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.Name,
+		&i.Framework,
+		&i.RepoUrl,
+		&i.DefaultBranch,
+		&i.RootDirectory,
+		&i.BuildCommand,
+		&i.InstallCommand,
+		&i.OutputDirectory,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getStaleBuilds = `-- name: GetStaleBuilds :many
+SELECT id, project_id, environment, status, branch, commit_sha, commit_message, deployment_url, build_logs_uri, build_started_at, build_finished_at, deleted_at, created_at, updated_at FROM deployments
+WHERE status = 'building'
+AND build_started_at < NOW() - INTERVAL '30 minutes'
+AND deleted_at IS NULL
+ORDER BY build_started_at
+LIMIT 50
+`
+
+func (q *Queries) GetStaleBuilds(ctx context.Context) ([]Deployment, error) {
+	rows, err := q.db.Query(ctx, getStaleBuilds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Deployment
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Environment,
+			&i.Status,
+			&i.Branch,
+			&i.CommitSha,
+			&i.CommitMessage,
+			&i.DeploymentUrl,
+			&i.BuildLogsUri,
+			&i.BuildStartedAt,
+			&i.BuildFinishedAt,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeam = `-- name: GetTeam :one
+SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM teams WHERE id = $1
+`
+
+func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
+	row := q.db.QueryRow(ctx, getTeam, id)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.StripeSubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTeamBySlug = `-- name: GetTeamBySlug :one
+SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM teams WHERE slug = $1
+`
+
+func (q *Queries) GetTeamBySlug(ctx context.Context, slug string) (Team, error) {
+	row := q.db.QueryRow(ctx, getTeamBySlug, slug)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.StripeSubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTeamMember = `-- name: GetTeamMember :one
+SELECT tm.team_id, tm.user_id, tm.role, tm.created_at, u.email, u.name FROM team_members tm
+JOIN users u ON tm.user_id = u.id
+WHERE tm.team_id = $1 AND tm.user_id = $2
+`
+
+type GetTeamMemberParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type GetTeamMemberRow struct {
+	TeamID    uuid.UUID          `json:"team_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	Role      string             `json:"role"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+}
+
+func (q *Queries) GetTeamMember(ctx context.Context, arg GetTeamMemberParams) (GetTeamMemberRow, error) {
+	row := q.db.QueryRow(ctx, getTeamMember, arg.TeamID, arg.UserID)
+	var i GetTeamMemberRow
+	err := row.Scan(
+		&i.TeamID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.Email,
+		&i.Name,
+	)
+	return i, err
+}
+
+const getTeamUsageDetail = `-- name: GetTeamUsageDetail :many
+SELECT id, team_id, metric, quantity, period_start, period_end, created_at FROM usage_records
+WHERE team_id = $1 AND metric = $2 AND period_start >= $3
+ORDER BY period_start DESC
+LIMIT $4
+`
+
+type GetTeamUsageDetailParams struct {
+	TeamID      uuid.UUID   `json:"team_id"`
+	Metric      string      `json:"metric"`
+	PeriodStart pgtype.Date `json:"period_start"`
+	Limit       int32       `json:"limit"`
+}
+
+func (q *Queries) GetTeamUsageDetail(ctx context.Context, arg GetTeamUsageDetailParams) ([]UsageRecord, error) {
+	rows, err := q.db.Query(ctx, getTeamUsageDetail,
+		arg.TeamID,
+		arg.Metric,
+		arg.PeriodStart,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UsageRecord
+	for rows.Next() {
+		var i UsageRecord
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Metric,
+			&i.Quantity,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeamUsageSummary = `-- name: GetTeamUsageSummary :many
+SELECT metric, SUM(quantity) AS total
+FROM usage_records
+WHERE team_id = $1 AND period_start >= $2 AND period_end <= $3
+GROUP BY metric
+`
+
+type GetTeamUsageSummaryParams struct {
+	TeamID      uuid.UUID   `json:"team_id"`
+	PeriodStart pgtype.Date `json:"period_start"`
+	PeriodEnd   pgtype.Date `json:"period_end"`
+}
+
+type GetTeamUsageSummaryRow struct {
+	Metric string `json:"metric"`
+	Total  int64  `json:"total"`
+}
+
+func (q *Queries) GetTeamUsageSummary(ctx context.Context, arg GetTeamUsageSummaryParams) ([]GetTeamUsageSummaryRow, error) {
+	rows, err := q.db.Query(ctx, getTeamUsageSummary, arg.TeamID, arg.PeriodStart, arg.PeriodEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTeamUsageSummaryRow
+	for rows.Next() {
+		var i GetTeamUsageSummaryRow
+		if err := rows.Scan(&i.Metric, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTeamsForUser = `-- name: GetTeamsForUser :many
+SELECT t.id, t.name, t.slug, t.stripe_subscription_id, t.created_at, t.updated_at, tm.role FROM teams t
+JOIN team_members tm ON t.id = tm.team_id
+WHERE tm.user_id = $1
+ORDER BY t.name
+`
+
+type GetTeamsForUserRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	Name                 string             `json:"name"`
+	Slug                 string             `json:"slug"`
+	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Role                 string             `json:"role"`
+}
+
+func (q *Queries) GetTeamsForUser(ctx context.Context, userID uuid.UUID) ([]GetTeamsForUserRow, error) {
+	rows, err := q.db.Query(ctx, getTeamsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTeamsForUserRow
+	for rows.Next() {
+		var i GetTeamsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.StripeSubscriptionID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, stripe_customer_id, tier, created_at, updated_at FROM users
-WHERE id = $1 LIMIT 1
+SELECT id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, id)
+	row := q.db.QueryRow(ctx, getUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
 		&i.CreatedAt,
@@ -100,17 +1056,17 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, stripe_customer_id, tier, created_at, updated_at FROM users
-WHERE email = $1 LIMIT 1
+SELECT id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
 		&i.CreatedAt,
@@ -119,21 +1075,530 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getWebhookByProviderInstall = `-- name: GetWebhookByProviderInstall :one
+SELECT w.id, w.project_id, w.provider, w.provider_install_id, w.hook_secret_encrypted, w.events, w.is_active, w.created_at, w.updated_at, p.team_id FROM webhooks w
+JOIN projects p ON w.project_id = p.id
+WHERE w.provider = $1 AND w.provider_install_id = $2 AND w.is_active = true
+`
+
+type GetWebhookByProviderInstallParams struct {
+	Provider          string `json:"provider"`
+	ProviderInstallID string `json:"provider_install_id"`
+}
+
+type GetWebhookByProviderInstallRow struct {
+	ID                  uuid.UUID          `json:"id"`
+	ProjectID           uuid.UUID          `json:"project_id"`
+	Provider            string             `json:"provider"`
+	ProviderInstallID   string             `json:"provider_install_id"`
+	HookSecretEncrypted []byte             `json:"hook_secret_encrypted"`
+	Events              []string           `json:"events"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	TeamID              uuid.UUID          `json:"team_id"`
+}
+
+func (q *Queries) GetWebhookByProviderInstall(ctx context.Context, arg GetWebhookByProviderInstallParams) (GetWebhookByProviderInstallRow, error) {
+	row := q.db.QueryRow(ctx, getWebhookByProviderInstall, arg.Provider, arg.ProviderInstallID)
+	var i GetWebhookByProviderInstallRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Provider,
+		&i.ProviderInstallID,
+		&i.HookSecretEncrypted,
+		&i.Events,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TeamID,
+	)
+	return i, err
+}
+
+type InsertBuildLogBatchParams struct {
+	ID           uuid.UUID          `json:"id"`
+	DeploymentID uuid.UUID          `json:"deployment_id"`
+	LineNumber   int32              `json:"line_number"`
+	Content      string             `json:"content"`
+	Stream       string             `json:"stream"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+const insertBuildLogLine = `-- name: InsertBuildLogLine :exec
+
+INSERT INTO build_log_lines (id, deployment_id, line_number, content, stream, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertBuildLogLineParams struct {
+	ID           uuid.UUID          `json:"id"`
+	DeploymentID uuid.UUID          `json:"deployment_id"`
+	LineNumber   int32              `json:"line_number"`
+	Content      string             `json:"content"`
+	Stream       string             `json:"stream"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+// ============================================================================
+// BUILD LOG LINES
+// ============================================================================
+func (q *Queries) InsertBuildLogLine(ctx context.Context, arg InsertBuildLogLineParams) error {
+	_, err := q.db.Exec(ctx, insertBuildLogLine,
+		arg.ID,
+		arg.DeploymentID,
+		arg.LineNumber,
+		arg.Content,
+		arg.Stream,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const listEnvVarKeys = `-- name: ListEnvVarKeys :many
+SELECT id, key_name, environment, kms_key_id, created_at, updated_at
+FROM project_env_vars
+WHERE project_id = $1
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $1 AND tm.user_id = $2
+)
+ORDER BY environment, key_name
+`
+
+type ListEnvVarKeysParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+type ListEnvVarKeysRow struct {
+	ID          uuid.UUID          `json:"id"`
+	KeyName     string             `json:"key_name"`
+	Environment string             `json:"environment"`
+	KmsKeyID    string             `json:"kms_key_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListEnvVarKeys(ctx context.Context, arg ListEnvVarKeysParams) ([]ListEnvVarKeysRow, error) {
+	rows, err := q.db.Query(ctx, listEnvVarKeys, arg.ProjectID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnvVarKeysRow
+	for rows.Next() {
+		var i ListEnvVarKeysRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.KeyName,
+			&i.Environment,
+			&i.KmsKeyID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectDeployments = `-- name: ListProjectDeployments :many
+SELECT d.id, d.project_id, d.environment, d.status, d.branch, d.commit_sha, d.commit_message, d.deployment_url, d.build_logs_uri, d.build_started_at, d.build_finished_at, d.deleted_at, d.created_at, d.updated_at FROM deployments d
+JOIN projects p ON d.project_id = p.id
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE d.project_id = $1 AND tm.user_id = $2 AND d.deleted_at IS NULL
+ORDER BY d.created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListProjectDeploymentsParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Limit     int32     `json:"limit"`
+	Offset    int32     `json:"offset"`
+}
+
+func (q *Queries) ListProjectDeployments(ctx context.Context, arg ListProjectDeploymentsParams) ([]Deployment, error) {
+	rows, err := q.db.Query(ctx, listProjectDeployments,
+		arg.ProjectID,
+		arg.UserID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Deployment
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Environment,
+			&i.Status,
+			&i.Branch,
+			&i.CommitSha,
+			&i.CommitMessage,
+			&i.DeploymentUrl,
+			&i.BuildLogsUri,
+			&i.BuildStartedAt,
+			&i.BuildFinishedAt,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectDomains = `-- name: ListProjectDomains :many
+SELECT d.id, d.project_id, d.domain, d.is_verified, d.verification_type, d.verification_token, d.tls_status, d.created_at, d.updated_at FROM domains d
+JOIN projects p ON d.project_id = p.id
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE d.project_id = $1 AND tm.user_id = $2
+ORDER BY d.created_at DESC
+`
+
+type ListProjectDomainsParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) ListProjectDomains(ctx context.Context, arg ListProjectDomainsParams) ([]Domain, error) {
+	rows, err := q.db.Query(ctx, listProjectDomains, arg.ProjectID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Domain
+	for rows.Next() {
+		var i Domain
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Domain,
+			&i.IsVerified,
+			&i.VerificationType,
+			&i.VerificationToken,
+			&i.TlsStatus,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectWebhooks = `-- name: ListProjectWebhooks :many
+SELECT w.id, w.project_id, w.provider, w.provider_install_id, w.hook_secret_encrypted, w.events, w.is_active, w.created_at, w.updated_at FROM webhooks w
+JOIN projects p ON w.project_id = p.id
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE w.project_id = $1 AND tm.user_id = $2
+ORDER BY w.created_at DESC
+`
+
+type ListProjectWebhooksParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) ListProjectWebhooks(ctx context.Context, arg ListProjectWebhooksParams) ([]Webhook, error) {
+	rows, err := q.db.Query(ctx, listProjectWebhooks, arg.ProjectID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Webhook
+	for rows.Next() {
+		var i Webhook
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Provider,
+			&i.ProviderInstallID,
+			&i.HookSecretEncrypted,
+			&i.Events,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listResourceAuditLog = `-- name: ListResourceAuditLog :many
+SELECT al.id, al.team_id, al.actor_id, al.action, al.resource_type, al.resource_id, al.metadata, al.ip_address, al.user_agent, al.created_at, u.email AS actor_email, u.name AS actor_name
+FROM audit_log al
+LEFT JOIN users u ON al.actor_id = u.id
+WHERE al.resource_type = $1 AND al.resource_id = $2
+AND al.created_at >= $3
+AND al.created_at < $4
+ORDER BY al.created_at DESC
+LIMIT $5
+`
+
+type ListResourceAuditLogParams struct {
+	ResourceType string             `json:"resource_type"`
+	ResourceID   pgtype.UUID        `json:"resource_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	CreatedAt_2  pgtype.Timestamptz `json:"created_at_2"`
+	Limit        int32              `json:"limit"`
+}
+
+type ListResourceAuditLogRow struct {
+	ID           uuid.UUID          `json:"id"`
+	TeamID       uuid.UUID          `json:"team_id"`
+	ActorID      pgtype.UUID        `json:"actor_id"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   pgtype.UUID        `json:"resource_id"`
+	Metadata     []byte             `json:"metadata"`
+	IpAddress    *netip.Addr        `json:"ip_address"`
+	UserAgent    pgtype.Text        `json:"user_agent"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorEmail   pgtype.Text        `json:"actor_email"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+}
+
+func (q *Queries) ListResourceAuditLog(ctx context.Context, arg ListResourceAuditLogParams) ([]ListResourceAuditLogRow, error) {
+	rows, err := q.db.Query(ctx, listResourceAuditLog,
+		arg.ResourceType,
+		arg.ResourceID,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListResourceAuditLogRow
+	for rows.Next() {
+		var i ListResourceAuditLogRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.ActorID,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.Metadata,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.CreatedAt,
+			&i.ActorEmail,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamAuditLog = `-- name: ListTeamAuditLog :many
+SELECT al.id, al.team_id, al.actor_id, al.action, al.resource_type, al.resource_id, al.metadata, al.ip_address, al.user_agent, al.created_at, u.email AS actor_email, u.name AS actor_name
+FROM audit_log al
+LEFT JOIN users u ON al.actor_id = u.id
+WHERE al.team_id = $1
+AND al.created_at >= $2
+AND al.created_at < $3
+ORDER BY al.created_at DESC
+LIMIT $4 OFFSET $5
+`
+
+type ListTeamAuditLogParams struct {
+	TeamID      uuid.UUID          `json:"team_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	CreatedAt_2 pgtype.Timestamptz `json:"created_at_2"`
+	Limit       int32              `json:"limit"`
+	Offset      int32              `json:"offset"`
+}
+
+type ListTeamAuditLogRow struct {
+	ID           uuid.UUID          `json:"id"`
+	TeamID       uuid.UUID          `json:"team_id"`
+	ActorID      pgtype.UUID        `json:"actor_id"`
+	Action       string             `json:"action"`
+	ResourceType string             `json:"resource_type"`
+	ResourceID   pgtype.UUID        `json:"resource_id"`
+	Metadata     []byte             `json:"metadata"`
+	IpAddress    *netip.Addr        `json:"ip_address"`
+	UserAgent    pgtype.Text        `json:"user_agent"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ActorEmail   pgtype.Text        `json:"actor_email"`
+	ActorName    pgtype.Text        `json:"actor_name"`
+}
+
+func (q *Queries) ListTeamAuditLog(ctx context.Context, arg ListTeamAuditLogParams) ([]ListTeamAuditLogRow, error) {
+	rows, err := q.db.Query(ctx, listTeamAuditLog,
+		arg.TeamID,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTeamAuditLogRow
+	for rows.Next() {
+		var i ListTeamAuditLogRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.ActorID,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceID,
+			&i.Metadata,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.CreatedAt,
+			&i.ActorEmail,
+			&i.ActorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamMembers = `-- name: ListTeamMembers :many
+SELECT tm.team_id, tm.user_id, tm.role, tm.created_at, u.email, u.name, u.avatar_url FROM team_members tm
+JOIN users u ON tm.user_id = u.id
+WHERE tm.team_id = $1
+ORDER BY tm.role, u.name
+`
+
+type ListTeamMembersRow struct {
+	TeamID    uuid.UUID          `json:"team_id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	Role      string             `json:"role"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+	AvatarUrl pgtype.Text        `json:"avatar_url"`
+}
+
+func (q *Queries) ListTeamMembers(ctx context.Context, teamID uuid.UUID) ([]ListTeamMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembers, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTeamMembersRow
+	for rows.Next() {
+		var i ListTeamMembersRow
+		if err := rows.Scan(
+			&i.TeamID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.Email,
+			&i.Name,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeamProjects = `-- name: ListTeamProjects :many
+SELECT p.id, p.team_id, p.name, p.framework, p.repo_url, p.default_branch, p.root_directory, p.build_command, p.install_command, p.output_directory, p.created_at, p.updated_at FROM projects p
+JOIN team_members tm ON p.team_id = tm.team_id
+WHERE p.team_id = $1 AND tm.user_id = $2
+ORDER BY p.created_at DESC
+`
+
+type ListTeamProjectsParams struct {
+	TeamID uuid.UUID `json:"team_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) ListTeamProjects(ctx context.Context, arg ListTeamProjectsParams) ([]Project, error) {
+	rows, err := q.db.Query(ctx, listTeamProjects, arg.TeamID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.ID,
+			&i.TeamID,
+			&i.Name,
+			&i.Framework,
+			&i.RepoUrl,
+			&i.DefaultBranch,
+			&i.RootDirectory,
+			&i.BuildCommand,
+			&i.InstallCommand,
+			&i.OutputDirectory,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const onboardUserWithTeam = `-- name: OnboardUserWithTeam :one
+
 WITH new_user AS (
-    INSERT INTO users (id, email, name)
-    VALUES ($1, $2, $3)
-    RETURNING id
+    INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id
 ),
 new_team AS (
-    INSERT INTO teams (id, name, slug)
-    VALUES ($4, $5, $6)
-    RETURNING id, name, slug
+    INSERT INTO teams (id, name, slug) VALUES ($4, $5, $6) RETURNING id
 )
 INSERT INTO team_members (team_id, user_id, role)
 SELECT new_team.id, new_user.id, 'owner'
 FROM new_user, new_team
-RETURNING team_id
+RETURNING team_members.team_id
 `
 
 type OnboardUserWithTeamParams struct {
@@ -145,9 +1610,12 @@ type OnboardUserWithTeamParams struct {
 	Slug   string    `json:"slug"`
 }
 
-// This uses a CTE to perform 3 inserts in 1 transaction
+// ============================================================================
+// ONBOARDING
+// ============================================================================
+// Atomic: creates user + personal team + owner membership in one transaction
 func (q *Queries) OnboardUserWithTeam(ctx context.Context, arg OnboardUserWithTeamParams) (uuid.UUID, error) {
-	row := q.db.QueryRowContext(ctx, onboardUserWithTeam,
+	row := q.db.QueryRow(ctx, onboardUserWithTeam,
 		arg.ID,
 		arg.Email,
 		arg.Name,
@@ -158,4 +1626,454 @@ func (q *Queries) OnboardUserWithTeam(ctx context.Context, arg OnboardUserWithTe
 	var team_id uuid.UUID
 	err := row.Scan(&team_id)
 	return team_id, err
+}
+
+const recordUsage = `-- name: RecordUsage :exec
+
+INSERT INTO usage_records (id, team_id, metric, quantity, period_start, period_end)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type RecordUsageParams struct {
+	ID          uuid.UUID      `json:"id"`
+	TeamID      uuid.UUID      `json:"team_id"`
+	Metric      string         `json:"metric"`
+	Quantity    pgtype.Numeric `json:"quantity"`
+	PeriodStart pgtype.Date    `json:"period_start"`
+	PeriodEnd   pgtype.Date    `json:"period_end"`
+}
+
+// ============================================================================
+// USAGE / BILLING
+// ============================================================================
+func (q *Queries) RecordUsage(ctx context.Context, arg RecordUsageParams) error {
+	_, err := q.db.Exec(ctx, recordUsage,
+		arg.ID,
+		arg.TeamID,
+		arg.Metric,
+		arg.Quantity,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+	)
+	return err
+}
+
+const removeTeamMember = `-- name: RemoveTeamMember :execrows
+DELETE FROM team_members
+WHERE team_members.team_id = $1 AND team_members.user_id = $2
+AND EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.team_id = $1 AND tm.user_id = $3 AND tm.role = 'owner'
+)
+AND NOT (
+    team_members.role = 'owner' AND (
+        SELECT COUNT(*) FROM team_members tm2
+        WHERE tm2.team_id = $1 AND tm2.role = 'owner'
+    ) <= 1
+)
+`
+
+type RemoveTeamMemberParams struct {
+	TeamID   uuid.UUID `json:"team_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	UserID_2 uuid.UUID `json:"user_id_2"`
+}
+
+func (q *Queries) RemoveTeamMember(ctx context.Context, arg RemoveTeamMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeTeamMember, arg.TeamID, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const softDeleteDeployment = `-- name: SoftDeleteDeployment :execrows
+UPDATE deployments SET deleted_at = NOW()
+WHERE deployments.id = $1 AND deployments.deleted_at IS NULL
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = deployments.project_id AND tm.user_id = $2 AND tm.role = 'owner'
+)
+`
+
+type SoftDeleteDeploymentParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) SoftDeleteDeployment(ctx context.Context, arg SoftDeleteDeploymentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteDeployment, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :one
+UPDATE deployments SET
+    status = $2,
+    deployment_url = COALESCE($3, deployment_url),
+    build_logs_uri = COALESCE($4, build_logs_uri),
+    build_started_at = CASE WHEN $2 = 'building' AND build_started_at IS NULL THEN NOW() ELSE build_started_at END,
+    build_finished_at = CASE WHEN $2 IN ('ready', 'error', 'canceled') AND build_finished_at IS NULL THEN NOW() ELSE build_finished_at END
+WHERE deployments.id = $1
+RETURNING id, project_id, environment, status, branch, commit_sha, commit_message, deployment_url, build_logs_uri, build_started_at, build_finished_at, deleted_at, created_at, updated_at
+`
+
+type UpdateDeploymentStatusParams struct {
+	ID            uuid.UUID   `json:"id"`
+	Status        string      `json:"status"`
+	DeploymentUrl pgtype.Text `json:"deployment_url"`
+	BuildLogsUri  pgtype.Text `json:"build_logs_uri"`
+}
+
+func (q *Queries) UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, updateDeploymentStatus,
+		arg.ID,
+		arg.Status,
+		arg.DeploymentUrl,
+		arg.BuildLogsUri,
+	)
+	var i Deployment
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.Status,
+		&i.Branch,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.DeploymentUrl,
+		&i.BuildLogsUri,
+		&i.BuildStartedAt,
+		&i.BuildFinishedAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateDomainTLSStatus = `-- name: UpdateDomainTLSStatus :one
+UPDATE domains SET tls_status = $2
+WHERE domains.id = $1 RETURNING id, project_id, domain, is_verified, verification_type, verification_token, tls_status, created_at, updated_at
+`
+
+type UpdateDomainTLSStatusParams struct {
+	ID        uuid.UUID `json:"id"`
+	TlsStatus string    `json:"tls_status"`
+}
+
+func (q *Queries) UpdateDomainTLSStatus(ctx context.Context, arg UpdateDomainTLSStatusParams) (Domain, error) {
+	row := q.db.QueryRow(ctx, updateDomainTLSStatus, arg.ID, arg.TlsStatus)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Domain,
+		&i.IsVerified,
+		&i.VerificationType,
+		&i.VerificationToken,
+		&i.TlsStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateProject = `-- name: UpdateProject :one
+UPDATE projects SET
+    name = COALESCE(NULLIF($3, ''), name),
+    framework = COALESCE(NULLIF($4, ''), framework),
+    repo_url = COALESCE(NULLIF($5, ''), repo_url),
+    default_branch = COALESCE(NULLIF($6, ''), default_branch),
+    root_directory = COALESCE(NULLIF($7, ''), root_directory),
+    build_command = $8,
+    install_command = $9,
+    output_directory = $10
+WHERE projects.id = $1
+AND EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = projects.id AND tm.user_id = $2 AND tm.role IN ('owner', 'member')
+)
+RETURNING id, team_id, name, framework, repo_url, default_branch, root_directory, build_command, install_command, output_directory, created_at, updated_at
+`
+
+type UpdateProjectParams struct {
+	ID              uuid.UUID   `json:"id"`
+	UserID          uuid.UUID   `json:"user_id"`
+	Column3         interface{} `json:"column_3"`
+	Column4         interface{} `json:"column_4"`
+	Column5         interface{} `json:"column_5"`
+	Column6         interface{} `json:"column_6"`
+	Column7         interface{} `json:"column_7"`
+	BuildCommand    pgtype.Text `json:"build_command"`
+	InstallCommand  pgtype.Text `json:"install_command"`
+	OutputDirectory pgtype.Text `json:"output_directory"`
+}
+
+func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProject,
+		arg.ID,
+		arg.UserID,
+		arg.Column3,
+		arg.Column4,
+		arg.Column5,
+		arg.Column6,
+		arg.Column7,
+		arg.BuildCommand,
+		arg.InstallCommand,
+		arg.OutputDirectory,
+	)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.TeamID,
+		&i.Name,
+		&i.Framework,
+		&i.RepoUrl,
+		&i.DefaultBranch,
+		&i.RootDirectory,
+		&i.BuildCommand,
+		&i.InstallCommand,
+		&i.OutputDirectory,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTeam = `-- name: UpdateTeam :one
+UPDATE teams SET name = $2, slug = $3
+WHERE teams.id = $1
+AND EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.team_id = $1 AND tm.user_id = $4 AND tm.role = 'owner'
+)
+RETURNING id, name, slug, stripe_subscription_id, created_at, updated_at
+`
+
+type UpdateTeamParams struct {
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+	Slug   string    `json:"slug"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error) {
+	row := q.db.QueryRow(ctx, updateTeam,
+		arg.ID,
+		arg.Name,
+		arg.Slug,
+		arg.UserID,
+	)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.StripeSubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTeamMemberRole = `-- name: UpdateTeamMemberRole :execrows
+UPDATE team_members SET role = $3
+WHERE team_members.team_id = $1 AND team_members.user_id = $2
+AND EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.team_id = $1 AND tm.user_id = $4 AND tm.role = 'owner'
+)
+AND NOT (
+    $3 != 'owner' AND (
+        SELECT COUNT(*) FROM team_members tm2
+        WHERE tm2.team_id = $1 AND tm2.role = 'owner'
+    ) <= 1 AND team_members.user_id = (
+        SELECT tm3.user_id FROM team_members tm3
+        WHERE tm3.team_id = $1 AND tm3.role = 'owner' LIMIT 1
+    )
+)
+`
+
+type UpdateTeamMemberRoleParams struct {
+	TeamID   uuid.UUID `json:"team_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	Role     string    `json:"role"`
+	UserID_2 uuid.UUID `json:"user_id_2"`
+}
+
+func (q *Queries) UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMemberRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateTeamMemberRole,
+		arg.TeamID,
+		arg.UserID,
+		arg.Role,
+		arg.UserID_2,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users SET name = $2, avatar_url = $3 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+`
+
+type UpdateUserProfileParams struct {
+	ID        uuid.UUID   `json:"id"`
+	Name      string      `json:"name"`
+	AvatarUrl pgtype.Text `json:"avatar_url"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.Name, arg.AvatarUrl)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.StripeCustomerID,
+		&i.Tier,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserStripeCustomerID = `-- name: UpdateUserStripeCustomerID :one
+UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+`
+
+type UpdateUserStripeCustomerIDParams struct {
+	ID               uuid.UUID   `json:"id"`
+	StripeCustomerID pgtype.Text `json:"stripe_customer_id"`
+}
+
+func (q *Queries) UpdateUserStripeCustomerID(ctx context.Context, arg UpdateUserStripeCustomerIDParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserStripeCustomerID, arg.ID, arg.StripeCustomerID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.StripeCustomerID,
+		&i.Tier,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserTier = `-- name: UpdateUserTier :one
+UPDATE users SET tier = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+`
+
+type UpdateUserTierParams struct {
+	ID   uuid.UUID `json:"id"`
+	Tier string    `json:"tier"`
+}
+
+func (q *Queries) UpdateUserTier(ctx context.Context, arg UpdateUserTierParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserTier, arg.ID, arg.Tier)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.StripeCustomerID,
+		&i.Tier,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertEnvVar = `-- name: UpsertEnvVar :one
+
+INSERT INTO project_env_vars (id, project_id, environment, key_name, encrypted_value, encrypted_data_key, encryption_iv, kms_key_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8
+WHERE EXISTS (
+    SELECT 1 FROM projects p
+    JOIN team_members tm ON p.team_id = tm.team_id
+    WHERE p.id = $2 AND tm.user_id = $9 AND tm.role IN ('owner', 'member')
+)
+ON CONFLICT (project_id, environment, key_name)
+DO UPDATE SET
+    encrypted_value = EXCLUDED.encrypted_value,
+    encrypted_data_key = EXCLUDED.encrypted_data_key,
+    encryption_iv = EXCLUDED.encryption_iv,
+    kms_key_id = EXCLUDED.kms_key_id
+RETURNING id, project_id, environment, key_name, encrypted_value, encrypted_data_key, encryption_iv, kms_key_id, created_at, updated_at
+`
+
+type UpsertEnvVarParams struct {
+	ID               uuid.UUID `json:"id"`
+	ProjectID        uuid.UUID `json:"project_id"`
+	Environment      string    `json:"environment"`
+	KeyName          string    `json:"key_name"`
+	EncryptedValue   []byte    `json:"encrypted_value"`
+	EncryptedDataKey []byte    `json:"encrypted_data_key"`
+	EncryptionIv     []byte    `json:"encryption_iv"`
+	KmsKeyID         string    `json:"kms_key_id"`
+	UserID           uuid.UUID `json:"user_id"`
+}
+
+// ============================================================================
+// SECRETS MANAGEMENT
+// ============================================================================
+func (q *Queries) UpsertEnvVar(ctx context.Context, arg UpsertEnvVarParams) (ProjectEnvVar, error) {
+	row := q.db.QueryRow(ctx, upsertEnvVar,
+		arg.ID,
+		arg.ProjectID,
+		arg.Environment,
+		arg.KeyName,
+		arg.EncryptedValue,
+		arg.EncryptedDataKey,
+		arg.EncryptionIv,
+		arg.KmsKeyID,
+		arg.UserID,
+	)
+	var i ProjectEnvVar
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Environment,
+		&i.KeyName,
+		&i.EncryptedValue,
+		&i.EncryptedDataKey,
+		&i.EncryptionIv,
+		&i.KmsKeyID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const verifyDomain = `-- name: VerifyDomain :one
+UPDATE domains SET is_verified = true, tls_status = 'provisioning'
+WHERE domains.id = $1 RETURNING id, project_id, domain, is_verified, verification_type, verification_token, tls_status, created_at, updated_at
+`
+
+func (q *Queries) VerifyDomain(ctx context.Context, id uuid.UUID) (Domain, error) {
+	row := q.db.QueryRow(ctx, verifyDomain, id)
+	var i Domain
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Domain,
+		&i.IsVerified,
+		&i.VerificationType,
+		&i.VerificationToken,
+		&i.TlsStatus,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

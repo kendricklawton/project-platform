@@ -2,48 +2,47 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Store defines all functions to execute db queries and transactions.
 type Store interface {
 	Querier
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
-	Close() error
+	Close()
 }
 
 // SQLStore is the concrete implementation
 type SQLStore struct {
 	*Queries
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-func Connect(databaseURL string) (Store, error) {
-	if databaseURL == "" {
-		databaseURL = "postgres://platform:secretpassword@localhost:5432/platform_db?sslmode=disable"
-	}
-
-	conn, err := sql.Open("pgx", databaseURL)
+// Connect initializes a high-performance connection pool using pgxpool.
+// Note: pgxpool requires a context to establish the initial connections.
+func Connect(ctx context.Context, databaseURL string) (Store, error) {
+	// pgxpool automatically manages connection pooling and multiplexing
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database connection: %w", err)
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	if err := conn.Ping(); err != nil {
+	// Verify the database is actually reachable
+	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("database unreachable: %w", err)
 	}
 
 	return &SQLStore{
-		Queries: New(conn),
-		db:      conn,
+		Queries: New(pool),
+		pool:    pool,
 	}, nil
 }
 
-// ExecTx handles the manual transaction lifecycle
+// ExecTx handles the manual transaction lifecycle natively using pgx.Tx
 func (s *SQLStore) ExecTx(ctx context.Context, fn func(*Queries) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -51,16 +50,16 @@ func (s *SQLStore) ExecTx(ctx context.Context, fn func(*Queries) error) error {
 	q := New(tx)
 	err = fn(q)
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
 			return fmt.Errorf("tx err: %v, rollback err: %v", err, rbErr)
 		}
 		return err
 	}
 
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // Close gracefully shuts down the database connection pool.
-func (s *SQLStore) Close() error {
-	return s.db.Close()
+func (s *SQLStore) Close() {
+	s.pool.Close()
 }

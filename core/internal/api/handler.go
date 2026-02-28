@@ -3,18 +3,17 @@ package api
 import (
 	"github.com/kendricklawton/project-platform/core/internal/db"
 	"github.com/kendricklawton/project-platform/core/internal/k8s"
-	"github.com/kendricklawton/project-platform/gen/go/platform/v1/platformv1connect"
+	"github.com/kendricklawton/project-platform/core/internal/service"
 )
 
-// Services acts as a dependency injection container for all Connect RPC handlers.
-// Add new services here as your platform grows.
+// Services holds pointers to your actual Business Logic (The internal services).
 type Services struct {
-	Team platformv1connect.TeamServiceHandler
-	User platformv1connect.UserServiceHandler
-	// Project platformv1connect.ProjectServiceHandler
-	// Billing platformv1connect.BillingServiceHandler
+	Team *service.TeamServer
+	User *service.UserServer
+	Auth *service.AuthService
 }
 
+// Handler is the core API layer.
 type Handler struct {
 	K8s            *k8s.Client
 	Store          db.Store
@@ -23,6 +22,7 @@ type Handler struct {
 	Services       Services
 }
 
+// NewHandler creates a new API Handler with all injected dependencies.
 func NewHandler(k8s *k8s.Client, store db.Store, workosAPIKey, workosClientID string, svcs Services) *Handler {
 	return &Handler{
 		K8s:            k8s,

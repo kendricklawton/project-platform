@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/kendricklawton/project-platform/core/internal/config"
@@ -9,18 +10,19 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
 
-	store, err := db.Connect(cfg.DatabaseURL)
+	store, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("db connection failed: %v", err)
 	}
 	defer store.Close()
 
-	// The wiring logic is now safely isolated in the internal/server package
 	srv := server.New(cfg, store, nil)
 
 	log.Printf("🚀 Platform Control Plane running on :%d", cfg.Port)

@@ -19,25 +19,21 @@ type Server struct {
 	port       int
 }
 
-// New creates the server and handles all dependency injection.
 func New(cfg *config.Config, store db.Store, k8sClient *k8s.Client) *Server {
-	// 1. Initialize Individual Services
-	teamSvc := &service.TeamServer{Store: store}
-	userSvc := &service.UserServer{Store: store}
+	teamSvc := service.NewTeamServer(store)
+	userSvc := service.NewUserServer(store)
+	authSvc := service.NewAuthService(store)
 
-	// 2. Pack them into the API Registry
 	registry := api.Services{
 		Team: teamSvc,
 		User: userSvc,
+		Auth: authSvc,
 	}
 
-	// 3. Initialize Core API Handler
 	apiHandler := api.NewHandler(k8sClient, store, cfg.WorkOSAPIKey, cfg.WorkOSClientID, registry)
 
-	// 4. Load Centralized Routes
 	router := apiHandler.Routes()
 
-	// 5. Configure the HTTP Server
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpServer := &http.Server{
 		Addr:    addr,
@@ -50,7 +46,6 @@ func New(cfg *config.Config, store db.Store, k8sClient *k8s.Client) *Server {
 	}
 }
 
-// Run starts the HTTP server.
 func (s *Server) Run() error {
 	return s.httpServer.ListenAndServe()
 }
