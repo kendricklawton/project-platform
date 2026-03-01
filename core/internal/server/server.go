@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -19,7 +20,7 @@ type Server struct {
 	port       int
 }
 
-func New(cfg *config.APIConfig, store db.Store, k8sClient *k8s.Client) *Server {
+func New(cfg *config.ServerConfig, store db.Store, k8sClient *k8s.Client) *Server {
 	teamSvc := service.NewTeamServer(store)
 	userSvc := service.NewUserServer(store)
 	authSvc := service.NewAuthService(store)
@@ -48,4 +49,8 @@ func New(cfg *config.APIConfig, store db.Store, k8sClient *k8s.Client) *Server {
 
 func (s *Server) Run() error {
 	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
 }

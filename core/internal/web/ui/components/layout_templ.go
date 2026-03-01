@@ -29,7 +29,7 @@ func Layout(title string, userName string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -42,20 +42,52 @@ func Layout(title string, userName string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap\" rel=\"stylesheet\"><link rel=\"stylesheet\" href=\"/static/styles.css\"><script src=\"https://unpkg.com/htmx.org@1.9.10\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js\"></script><script>\n\t\t\tif (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {\n\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t} else {\n\t\t\t\tdocument.documentElement.classList.remove('dark');\n\t\t\t}\n\t\t\tfunction toggleTheme() {\n\t\t\t\tdocument.documentElement.classList.toggle('dark');\n\t\t\t\tlocalStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';\n\t\t\t}\n\t\t</script></head><body class=\"bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200 font-mono flex flex-col min-h-screen transition-colors duration-500\"><header class=\"fixed top-0 left-0 w-full border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur-md z-40 transition-colors duration-500\"><div class=\"max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between\"><div class=\"flex items-center gap-4\"><button hx-get=\"/\" hx-target=\"body\" hx-push-url=\"true\" class=\"text-lg text-zinc-900 dark:text-white uppercase tracking-widest flex items-center gap-3 hover:opacity-70 transition-opacity focus:outline-none cursor-pointer\"><div class=\"w-2 h-2 bg-green-500 animate-pulse\"></div>Project Platform</button> <span class=\"text-zinc-300 dark:text-zinc-700 hidden sm:inline-block\">/</span> <span class=\"text-xs text-zinc-400 font-mono bg-zinc-200 dark:bg-zinc-900 px-2 py-1 rounded-sm hidden sm:inline-block\">engine: knative-serving</span></div><div class=\"relative\" x-data=\"{ open: false }\"><button @click=\"open = !open\" class=\"flex items-center gap-2 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors focus:outline-none\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-4 h-4\"><circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"10\" r=\"3\"></circle><path d=\"M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662\"></path></svg> <span class=\"text-xs font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap\" rel=\"stylesheet\"><link rel=\"stylesheet\" href=\"/static/styles.css\"><script src=\"https://unpkg.com/htmx.org@1.9.10\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js\"></script><script src=\"https://unpkg.com/lucide@latest\"></script><script>\n\t\t\t\t// Draw icons on initial page load\n\t\t\t\tdocument.addEventListener(\"DOMContentLoaded\", () => {\n\t\t\t\t\tlucide.createIcons();\n\t\t\t\t});\n\t\t\t\t// Re-draw icons after any HTMX swap\n\t\t\t\tdocument.addEventListener('htmx:afterSwap', () => {\n\t\t\t\t\tlucide.createIcons();\n\t\t\t\t});\n\t\t\t</script><script>\n\t\t\t\tif (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {\n\t\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t\t} else {\n\t\t\t\t\tdocument.documentElement.classList.remove('dark');\n\t\t\t\t}\n\n\t\t\t\twindow.toggleTheme = function() {\n\t\t\t\t\tif (document.documentElement.classList.contains('dark')) {\n\t\t\t\t\t\tdocument.documentElement.classList.remove('dark');\n\t\t\t\t\t\tlocalStorage.theme = 'light';\n\t\t\t\t\t} else {\n\t\t\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t\t\t\tlocalStorage.theme = 'dark';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t</script></head><body class=\"bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono flex flex-col min-h-screen transition-colors duration-500 selection:bg-green-500/30\"><header class=\"fixed top-0 left-0 w-full border-b border-zinc-200 dark:border-white/10 bg-zinc-50/90 dark:bg-black/90backdrop-blur-md z-40 transition-colors duration-500\"><div class=\"max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between\"><div class=\"flex items-center gap-4\"><button hx-get=\"/\" hx-target=\"#main-content\" hx-push-url=\"true\" class=\"text-lg text-zinc-900 dark:text-zinc-100 uppercase tracking-widest flex items-center gap-3 hover:opacity-70 transition-opacity focus:outline-none cursor-pointer\"><div class=\"w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse\"></div>Project Platform</button> <span class=\"text-zinc-300 dark:text-zinc-800 hidden sm:inline-block\">/</span> <span class=\"text-[10px] text-zinc-500 dark:text-zinc-400 font-mono border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm hidden sm:inline-block\">engine: knative-serving</span></div><div class=\"relative\" x-data=\"{ open: false }\"><button @click=\"open = !open\" class=\"flex items-center gap-2 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors focus:outline-none\"><span class=\"text-xs font-mono uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(userName)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/layout.templ`, Line: 47, Col: 49}
+		if userName != "" {
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(userName)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/layout.templ`, Line: 69, Col: 19}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "GUEST_SYS")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span> <span class=\"opacity-70 mt-0.5 flex items-center\"><span x-show=\"!open\"><i data-lucide=\"chevron-down\" width=\"16\" height=\"16\"></i></span> <span x-show=\"open\" style=\"display: none;\"><i data-lucide=\"chevron-up\" width=\"16\" height=\"16\"></i></span></span></button><div x-show=\"open\" @click.away=\"open = false\" x-transition.opacity style=\"top: 100%;\" class=\"absolute mt-2 w-48  px-1 dark:bg-black border border-zinc-300 dark:border-white/10 shadow-2xl z-50 py-1 right-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</span> <svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"w-3 h-3 transition-transform duration-200\" :class=\"open ? 'rotate-180' : ''\"><path d=\"m6 9 6 6 6-6\"></path></svg></button><div x-show=\"open\" @click.away=\"open = false\" x-transition.opacity class=\"absolute right-0 mt-4 w-48 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl z-50 py-1\" style=\"display: none;\"><button hx-get=\"/dashboard\" hx-target=\"#main-content\" @click=\"open = false\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors uppercase tracking-widest\">[ Dashboard ]</button> <button hx-get=\"/settings\" hx-target=\"#main-content\" @click=\"open = false\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors uppercase tracking-widest\">[ Settings ]</button><div class=\"border-t border-zinc-200 dark:border-zinc-800 my-1\"></div><button @click=\"toggleTheme()\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors uppercase tracking-widest\">[ Toggle Theme ]</button></div></div></div></header><main id=\"main-content\" class=\"w-full max-w-5xl mx-auto pt-28 px-4 sm:px-6 pb-12\">")
+		if userName != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<button hx-get=\"/dashboard\" hx-target=\"#main-content\" @click=\"open = false\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest\">[ Dashboard ]</button> <button hx-get=\"/settings\" hx-target=\"#main-content\" @click=\"open = false\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest\">[ Settings ]</button>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<a href=\"/auth/login\" @click=\"open = false\" class=\"block w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest\">[ Login ]</a>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"border-t border-zinc-200 dark:border-white/10 my-1\"></div><button @click=\"toggleTheme()\" class=\"w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest\">[ Toggle Theme ]</button> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if userName != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"border-t border-zinc-200 dark:border-white/10 my-1\"></div><a href=\"/auth/logout\" @click=\"open = false\" class=\"block w-full text-left px-4 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-white/5 transition-colors uppercase tracking-widest\">[ Logout ]</a>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div></div></header><main id=\"main-content\" class=\"w-full max-w-5xl mx-auto pt-28 px-4 sm:px-6 pb-12\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -63,7 +95,7 @@ func Layout(title string, userName string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

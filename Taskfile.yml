@@ -38,7 +38,7 @@ vars:
   KNATIVE_VERSION: "1.14.0"
 
   # Database Defaults
-  DATABASE_URL: "{{.DATABASE_URL}}"
+  PLATFORM_DATABASE_URL: "{{.PLATFORM_DATABASE_URL}}"
 
 tasks:
   _packer_build:
@@ -291,12 +291,12 @@ tasks:
   db:migrate:
     desc: "Run database migrations (up)"
     cmds:
-      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.DATABASE_URL}}" up
+      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.PLATFORM_DATABASE_URL}}" up
 
   db:migrate-down:
     desc: "Rollback the last database migration (down 1)"
     cmds:
-      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.DATABASE_URL}}" down 1
+      - go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest -path core/migrations -database "{{.PLATFORM_DATABASE_URL}}" down 1
 
   db:create-migration:
     desc: "Create a new migration (usage: task db:create-migration NAME=create_users)"
@@ -326,11 +326,11 @@ tasks:
     cmds:
       - docker exec -it project-platform-db-1 psql -U platform platform_db
 
-  dev:api:
-    desc: "Run the Core API locally with live-reload (Air)"
+  dev:server:
+    desc: "Run the Core Server locally with live-reload (Air)"
     dir: core
     cmds:
-      - go run github.com/air-verse/air@latest -c .air.api.toml
+      - go run github.com/air-verse/air@latest -c .air.server.toml
 
   dev:worker:
     desc: "Run the Background Build Worker locally"
@@ -344,5 +344,19 @@ tasks:
     cmds:
       - |
         templ generate --watch & \
-        tailwindcss -i ./internal/ui/static/input.css -o ./internal/ui/static/styles.css --watch & \
+        tailwindcss -i ./internal/web/ui/static/input.css -o ./internal/web/ui/static/styles.css --watch & \
         go run github.com/air-verse/air@latest -c .air.web.toml
+
+  dev:cli:
+    desc: "Run the CLI locally with live-reload (Air)"
+    dir: core
+    cmds:
+      - go run github.com/air-verse/air@latest -c .air.cli.toml
+
+  dev:
+    desc: "Run all services locally with live-reload (Air)"
+    cmds:
+      - task: dev:server
+      # - task: dev:worker
+      - task: dev:web
+      # - task: dev:cli

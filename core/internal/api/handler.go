@@ -14,7 +14,7 @@ type Services struct {
 }
 
 // Handler is the core API layer.
-type Handler struct {
+type handler struct {
 	K8s            *k8s.Client
 	Store          db.Store
 	WorkOSAPIKey   string
@@ -23,8 +23,8 @@ type Handler struct {
 }
 
 // NewHandler creates a new API Handler with all injected dependencies.
-func NewHandler(k8s *k8s.Client, store db.Store, workosAPIKey, workosClientID string, svcs Services) *Handler {
-	return &Handler{
+func NewHandler(k8s *k8s.Client, store db.Store, workosAPIKey, workosClientID string, svcs Services) *handler {
+	return &handler{
 		K8s:            k8s,
 		Store:          store,
 		WorkOSAPIKey:   workosAPIKey,

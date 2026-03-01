@@ -6,30 +6,22 @@ import (
 	"strconv"
 )
 
-// ============================================================================
-// API CONFIGURATION (For platform-api)
-// ============================================================================
-
-type APIConfig struct {
+type ServerConfig struct {
 	Port           int
 	Debug          bool
-	DatabaseURL    string // Required
-	WorkOSAPIKey   string // Required
-	WorkOSClientID string // Required
-	KubeConfigPath string
-	S3Bucket       string // Required
-	S3Region       string
-	S3AccessKey    string // Required
-	S3SecretKey    string // Required
+	DatabaseURL    string
+	WorkOSAPIKey   string
+	WorkOSClientID string
 }
 
-func LoadAPI() (*APIConfig, error) {
-	cfg := &APIConfig{}
+func LoadServer() (*ServerConfig, error) {
+	cfg := &ServerConfig{}
 	var err error
 
 	if cfg.Port, err = getEnvInt("PLATFORM_PORT", 8080); err != nil {
 		return nil, err
 	}
+
 	if cfg.Debug, err = getEnvBool("PLATFORM_DEBUG", false); err != nil {
 		return nil, err
 	}
@@ -37,38 +29,21 @@ func LoadAPI() (*APIConfig, error) {
 	if cfg.DatabaseURL, err = getEnvRequired("PLATFORM_DATABASE_URL"); err != nil {
 		return nil, err
 	}
-	if cfg.WorkOSAPIKey, err = getEnvRequired("PLATFORM_WORKOS_API_KEY"); err != nil {
+	if cfg.WorkOSAPIKey, err = getEnvRequired("WORKOS_API_KEY"); err != nil {
 		return nil, err
 	}
-	if cfg.WorkOSClientID, err = getEnvRequired("PLATFORM_WORKOS_CLIENT_ID"); err != nil {
+	if cfg.WorkOSClientID, err = getEnvRequired("WORKOS_CLIENT_ID"); err != nil {
 		return nil, err
 	}
-	if cfg.S3Bucket, err = getEnvRequired("PLATFORM_S3_BUCKET"); err != nil {
-		return nil, err
-	}
-	if cfg.S3AccessKey, err = getEnvRequired("PLATFORM_S3_ACCESS_KEY"); err != nil {
-		return nil, err
-	}
-	if cfg.S3SecretKey, err = getEnvRequired("PLATFORM_S3_SECRET_KEY"); err != nil {
-		return nil, err
-	}
-
-	cfg.KubeConfigPath = getEnv("PLATFORM_KUBECONFIG", "")
-	cfg.S3Region = getEnv("PLATFORM_S3_REGION", "us-east-1")
 
 	return cfg, nil
 }
 
-// ============================================================================
 // WEB BFF CONFIGURATION (For platform-web)
-// ============================================================================
-
 type WebConfig struct {
-	Port           int
-	Debug          bool
-	APIURL         string // Required
-	WorkOSAPIKey   string // Required
-	WorkOSClientID string // Required
+	Port   int
+	Debug  bool
+	APIURL string
 }
 
 func LoadWeb() (*WebConfig, error) {
@@ -84,20 +59,10 @@ func LoadWeb() (*WebConfig, error) {
 
 	cfg.APIURL = getEnv("PLATFORM_API_URL", "http://localhost:8080")
 
-	if cfg.WorkOSAPIKey, err = getEnvRequired("PLATFORM_WORKOS_API_KEY"); err != nil {
-		return nil, err
-	}
-	if cfg.WorkOSClientID, err = getEnvRequired("PLATFORM_WORKOS_CLIENT_ID"); err != nil {
-		return nil, err
-	}
-
 	return cfg, nil
 }
 
-// ============================================================================
 // CLI CONFIGURATION (For platform-cli)
-// ============================================================================
-
 // CLIConfig holds the state for the developer's local CLI environment.
 // The `mapstructure` tags allow Viper to easily unmarshal JSON/Env vars into this struct.
 type CLIConfig struct {
@@ -118,10 +83,7 @@ func LoadCLI() (*CLIConfig, error) {
 	return cfg, nil
 }
 
-// ============================================================================
 // HELPER FUNCTIONS
-// ============================================================================
-
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value

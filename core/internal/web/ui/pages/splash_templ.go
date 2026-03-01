@@ -10,8 +10,8 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
-// Accepts userName so it can be passed up to the master Layout
-func Splash(status string, userName string) templ.Component {
+// 1. The FULL Page
+func SplashPage(status string, userName string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -32,10 +32,6 @@ func Splash(status string, userName string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<title>Project Platform | Booting</title>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
 		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
@@ -48,26 +44,56 @@ func Splash(status string, userName string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"flex flex-col items-center justify-center min-h-[70vh] animate-fade-in\"><div class=\"text-center space-y-2\"><h1 class=\"text-4xl font-bold tracking-[0.2em] text-black dark:text-white uppercase transition-colors duration-500\">Project Platform</h1><div class=\"min-h-[120px] pt-2\"><div id=\"status-container\"><p class=\"text-xs text-zinc-500 tracking-widest uppercase mb-10\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(status)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/splash.templ`, Line: 15, Col: 15}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><div hx-get=\"/healthz\" hx-trigger=\"load delay:1500ms\" hx-target=\"#status-container\" hx-swap=\"outerHTML\"><div class=\"w-48 h-px bg-zinc-300 dark:bg-zinc-800 overflow-hidden mx-auto\"><div class=\"h-full bg-zinc-800 dark:bg-zinc-100 animate-loading\"></div></div></div></div></div></div></div>")
+			templ_7745c5c3_Err = SplashContent(status).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
 		templ_7745c5c3_Err = components.Layout("Project Platform | Booting", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// 2. The PARTIAL Fragment
+func SplashContent(status string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var3 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var3 == nil {
+			templ_7745c5c3_Var3 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<title>Project Platform | Booting</title><div class=\"fixed inset-0 z-0 pointer-events-none opacity-5 dark:opacity-10\" style=\"background-image: linear-gradient(rgba(0,0,0,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.5) 1px, transparent 1px); background-size: 30px 30px;\"></div><div class=\"relative z-10 flex flex-col items-center justify-center animate-fade-in\" style=\"min-height: calc(100vh - 10rem);\"><div class=\"text-center flex flex-col items-center w-full max-w-2xl\"><h1 class=\"text-4xl md:text-5xl font-bold tracking-[0.2em] text-black dark:text-zinc-100 uppercase mb-8 flex items-center justify-center gap-3\">PROJECT_PLATFORM <span class=\"animate-pulse bg-black dark:bg-white w-4 h-8 md:h-10 inline-block\"></span></h1><div class=\"h-32 w-full flex items-start justify-center relative\"><div id=\"status-container\" class=\"absolute w-full flex flex-col items-center\"><p class=\"text-xs text-zinc-500 tracking-widest uppercase mb-6 font-mono\">[ ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(status)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/splash.templ`, Line: 25, Col: 16}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " ]</p><div hx-get=\"/healthz\" hx-trigger=\"load delay:1500ms\" hx-target=\"#status-container\" hx-swap=\"outerHTML\"><div class=\"w-64 h-px bg-zinc-300 dark:bg-zinc-800 overflow-hidden mx-auto relative\"><div class=\"absolute top-0 left-0 h-full bg-black dark:bg-zinc-100 w-1/3 animate-[loading_1s_ease-in-out_infinite_alternate]\"></div></div><p class=\"text-[10px] text-zinc-400 dark:text-zinc-600 tracking-widest uppercase mt-4 animate-pulse\">Awaiting connection...</p></div></div></div></div></div><div class=\"fixed bottom-4 left-4 text-[10px] text-zinc-400 dark:text-zinc-600 font-mono hidden md:block opacity-50 tracking-widest leading-loose\">SYS.MEM: 640K OK<br>CORE_V:  1.0.4<br>NET:     ESTABLISHED</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

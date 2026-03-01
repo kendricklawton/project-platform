@@ -6,7 +6,7 @@ import (
 	"github.com/kendricklawton/project-platform/gen/go/platform/v1/platformv1connect"
 )
 
-func (h *Handler) Routes() chi.Router {
+func (h *handler) Routes() chi.Router {
 	router := chi.NewRouter()
 
 	router.Use(middleware.CleanPath)
@@ -16,13 +16,13 @@ func (h *Handler) Routes() chi.Router {
 	router.Route("/v1", func(v1 chi.Router) {
 		// --- REST Routes (OAuth Flow) ---
 		v1.Route("/auth", func(auth chi.Router) {
-			auth.Get("/login", h.AuthLogin)
-			auth.Get("/callback", h.AuthCallback)
+			auth.Get("/login", h.authLogin)
+			auth.Get("/callback", h.authCallback)
 		})
 
 		// --- RPC Routes (Core API Platform) ---
 		v1.Group(func(rpc chi.Router) {
-			rpc.Use(h.RequireAuth)
+			rpc.Use(h.requireAuth)
 
 			// Mount ConnectRPC handlers utilizing the DI-injected services
 			teamPath, teamHandler := platformv1connect.NewTeamServiceHandler(h.Services.Team)

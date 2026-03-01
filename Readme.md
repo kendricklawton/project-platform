@@ -10,9 +10,9 @@ Project Platform is an experimental project where we are exploring how to build 
 ## 🎯 Learning Goals
 
 - **Go & Kubernetes:** Understanding how to build and orchestrate Go services effectively.
+- **Immutable Infrastructure:** Using Packer to build hardened "Golden Images" for instant Terraform scaling.
+- **Private Networking & Security:** Securing cluster access with Tailscale and hardening workloads with gVisor, KubeArmor, and Kyverno.
 - **Serverless Patterns:** Experimenting with Knative for "scale to zero" and event-driven architectures.
-- **Infrastructure as Code:** Practicing with Terraform, Packer, and Task to manage complex setups.
-- **Security Sandboxing:** Learning about gVisor, KubeArmor, and Kyverno for hardening workloads.
 - **Observability:** Setting up and tuning the VictoriaMetrics, Loki, Grafana, and Fluent Bit stack.
 - **GitOps:** ArgoCD and Sealed Secrets for secure declarative application management.
 
@@ -33,28 +33,27 @@ This stack represents what we are currently playing with:
 - **Interactivity:** [Alpine.js](https://alpinejs.dev/)
 
 ### Infrastructure
-- **Operating System:** Ubuntu Linux
+- **Operating System:** Ubuntu Linux (Immutable Golden Images)
 - **Orchestration:** K3s
 - **Provisioning:** Terraform & Packer
-- **Providers:** Hetzner (Bare Metal)
+- **Providers:** Hetzner Cloud (Primary) & DigitalOcean
 - **Serverless:** Knative Serving & Eventing
 - **GitOps:** ArgoCD
-- **Security:** gVisor, KubeArmor, Kyverno
-- **Networking:** Cilium & NATS
+- **Security & Networking:** Tailscale, Cilium, NATS, gVisor, KubeArmor, Kyverno
 
 ## 🏗 Project Structure
 
 ```text
 .
-├── core/                # Go API, BFF (HTMX), & CLI Logic
-│   ├── cmd/             # Entry points
-│   ├── internal/        # Private application code
+├── core/                # Go Monorepo
+│   ├── cmd/             # Entry points (platform-server, platform-web, platform-worker, etc.)
+│   ├── internal/        # Private application code & HTMX templates
 │   ├── migrations/      # Database migrations
 │   └── pkg/             # SDK experiments
 ├── infrastructure/      # IaC experiments
-│   ├── packer/          # Image builds
-│   ├── argocd/          # Kubernetes manifests
-│   └── terraform/       # Cloud resources
+│   ├── packer/          # Golden Image builds (Ubuntu + K3s + Tailscale)
+│   ├── argocd/          # Kubernetes manifests & ArgoCD Apps
+│   └── terraform/       # Cloud resources & cluster bootstrapping
 ├── proto/               # Protobuf definitions
 └── RUNBOOK.md           # Operational notes
 ```
@@ -77,9 +76,17 @@ If you want to poke around the project:
    task db:setup
    ```
 
-4. **Run the API:**
+4. **Run the Local Services:**
+   In separate terminal windows, run the following:
    ```bash
+   # Run the Core API Server
    task dev:api
+
+   # Run the Background Worker
+   task dev:worker
+
+   # Run the HTMX Web Frontend
+   task dev:web
    ```
 
 ## 📖 Notes

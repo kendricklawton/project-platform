@@ -1,111 +1,111 @@
 package web
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/pages"
 	"github.com/kendricklawton/project-platform/gen/go/platform/v1/platformv1connect"
 )
 
-type contextKey string
-
-const userContextKey = contextKey("userName")
-
+// Handler acts as the Backend-For-Frontend (BFF) controller.
 type Handler struct {
+	APIURL     string
 	UserClient platformv1connect.UserServiceClient
 	TeamClient platformv1connect.TeamServiceClient
 }
 
-func NewHandler(uc platformv1connect.UserServiceClient, tc platformv1connect.TeamServiceClient) *Handler {
-	return &Handler{UserClient: uc, TeamClient: tc}
+// NewHandler creates a new Web Handler with the required API clients.
+func NewHandler(apiURL string, userClient platformv1connect.UserServiceClient, teamClient platformv1connect.TeamServiceClient) *Handler {
+	return &Handler{
+		APIURL:     apiURL,
+		UserClient: userClient,
+		TeamClient: teamClient,
+	}
 }
 
-// 2. The Auth Middleware
-func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		/* TODO: Production logic goes here
-		   cookie, err := r.Cookie("auth_token")
-		   if err != nil {
-		       http.Redirect(w, r, "/login", http.StatusFound)
-		       return
-		   }
-		   // Validate JWT/Cookie and extract name...
-		*/
-
-		// For now, mock reading the JWT cookie on init load
-		userName := "K-Henry"
-
-		// Inject the user name into the request context
-		ctx := context.WithValue(r.Context(), userContextKey, userName)
-
-		// Pass the request down the chain with the new context attached
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// isMainContentSwap checks if the request is an HTMX request explicitly targeting the main content area.
+func (h *Handler) isMainContentSwap(r *http.Request) bool {
+	isHTMX := r.Header.Get("HX-Request") == "true"
+	isMainContentTarget := r.Header.Get("HX-Target") == "main-content"
+	return isHTMX && isMainContentTarget
 }
 
-func (h *Handler) Routes() chi.Router {
-	r := chi.NewRouter()
+// Splash renders the initial boot screen.
+func (h *Handler) Splash(w http.ResponseWriter, r *http.Request) {
+	initialStatus := "INITIALIZING PLATFORM..."
+	userName := ""
 
-	fs := http.FileServer(http.Dir("internal/web/ui/static"))
-	r.Handle("/static/*", http.StripPrefix("/static/", fs))
+	cookie, err := r.Cookie(SessionCookieName)
+	if err == nil && cookie.Value != "" {
+		userName = "AUTH_ACTIVE"
+	}
 
-	r.Group(func(r chi.Router) {
-		r.Use(h.AuthMiddleware)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-		// Splash
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			userName := r.Context().Value(userContextKey).(string)
-			pages.Splash("INITIALIZING...", userName).Render(r.Context(), w)
-		})
+	// Use our helper to check for HTMX partial swaps
+	if h.isMainContentSwap(r) {
+		component := pages.SplashContent(initialStatus)
+		if err := component.Render(r.Context(), w); err != nil {
+			http.Error(w, "Failed to render splash content", http.StatusInternalServerError)
+		}
+		return
+	}
 
-		// Dashboard Page
-		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
-			userName := r.Context().Value(userContextKey).(string)
+	// Standard full page load
+	component := pages.SplashPage(initialStatus, userName)
+	if err := component.Render(r.Context(), w); err != nil {
+		http.Error(w, "Failed to render splash page", http.StatusInternalServerError)
+	}
+}
 
-			// If HTMX is hot-swapping, only send the partial
-			if r.Header.Get("HX-Request") == "true" {
-				// Tell HTMX to update the browser tab!
-				w.Header().Set("HX-Title", "Project Platform | Dashboard")
+// Healthz handles the connection status check and returns the appropriate action button.
+func (h *Handler) Healthz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-				pages.DashboardContent().Render(r.Context(), w)
-				return
-			}
+	_, err := r.Cookie(SessionCookieName)
+	isLoggedIn := err == nil
 
-			// If init load, send the whole page
-			pages.DashboardPage(userName).Render(r.Context(), w)
-		})
+	actionURL := "/auth/login"
+	buttonText := "INITIALIZE LOGIN SEQUENCE"
 
-		// Settings Page
-		r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
-			userName := r.Context().Value(userContextKey).(string)
+	if isLoggedIn {
+		actionURL = "/dashboard"
+		buttonText = "ENTER SECURE CONSOLE"
+	}
 
-			if r.Header.Get("HX-Request") == "true" {
-				// Tell HTMX to update the browser tab!
-				w.Header().Set("HX-Title", "Project Platform | Settings")
+	// Render the pure Templ component instead of a raw HTML string
+	component := components.HealthzStatus(actionURL, buttonText)
+	if err := component.Render(r.Context(), w); err != nil {
+		http.Error(w, "Failed to render health status", http.StatusInternalServerError)
+	}
+}
 
-				pages.SettingsContent().Render(r.Context(), w)
-				return
-			}
-			pages.SettingsPage(userName).Render(r.Context(), w)
-		})
+// Dashboard renders the protected dashboard area.
+func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-		// Healthz HTMX Target
-		r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-			readyHTML := `
-						<div id="status-container" class="transition-opacity duration-700">
-							<p class="text-xs font-mono text-green-600 dark:text-green-400 tracking-widest uppercase mb-12">
-								SYSTEMS_READY
-							</p>
-							<button hx-get="/dashboard" hx-target="#main-content" hx-push-url="true" class="px-8 py-3 border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs font-mono tracking-widest hover:bg-zinc-200 dark:hover:bg-zinc-900 hover:text-black dark:hover:text-white transition-colors duration-300 cursor-pointer">
-								ENTER_WORKSPACE
-							</button>
-						</div>
-					`
-			w.Write([]byte(readyHTML))
-		})
-	})
+	// Extract the token using our new helper (injected by RequireAuth middleware)
+	_, ok := GetTokenFromContext(r.Context())
+	if !ok {
+		// Fallback if something went terribly wrong with middleware
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
 
-	return r
+	// TODO: Use the token to fetch actual user details from h.UserClient
+	userName := "AUTH_ACTIVE"
+
+	if h.isMainContentSwap(r) {
+		component := pages.DashboardContent()
+		if err := component.Render(r.Context(), w); err != nil {
+			http.Error(w, "Failed to render dashboard content", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	component := pages.DashboardPage(userName)
+	if err := component.Render(r.Context(), w); err != nil {
+		http.Error(w, "Failed to render dashboard page", http.StatusInternalServerError)
+	}
 }

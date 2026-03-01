@@ -19,7 +19,7 @@ type contextKey string
 const userIDKey contextKey = "user_id"
 
 // RequireAuth validates authentication and injects the UserID into the context.
-func (h *Handler) RequireAuth(next http.Handler) http.Handler {
+func (h *handler) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -40,7 +40,7 @@ func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 }
 
 // AuthLogin initiates the WorkOS OAuth flow.
-func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
+func (h *handler) authLogin(w http.ResponseWriter, r *http.Request) {
 	cliRedirectURI := r.URL.Query().Get("redirect_uri")
 	state := r.URL.Query().Get("state")
 
@@ -68,7 +68,7 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthCallback handles the return from WorkOS and provisions the User/Team.
-func (h *Handler) AuthCallback(w http.ResponseWriter, r *http.Request) {
+func (h *handler) authCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	returnedState := r.URL.Query().Get("state")
 
