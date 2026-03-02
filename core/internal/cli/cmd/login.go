@@ -16,39 +16,34 @@ import (
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authenticate your CLI with Project Platform",
+	Short: "Authenticate via browser OAuth",
 	Run: func(cmd *cobra.Command, args []string) {
 		handleLogin()
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(loginCmd)
+	authCmd.AddCommand(loginCmd)
 }
 
 func handleLogin() {
-	// 1. Use ShowInfo for a subtle, muted startup message
-	tui.ShowInfo("Opening your browser to log in to Project Platform...")
+	tui.ShowInfo("Opening your browser to log in...")
 
 	apiLoginURL := viper.GetString("api_url") + "/v1/auth/login"
 	cliPort := "9999"
 
 	tokenChan := make(chan string)
 
-	// Local server to catch the redirect
 	m := http.NewServeMux()
 	m.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		token := r.URL.Query().Get("token")
 		if token == "" {
-			http.Error(w, "Authentication failed: No token received", http.StatusBadRequest)
+			http.Error(w, "Authentication failed: no token received", http.StatusBadRequest)
 			return
 		}
-
-		// A terminal-inspired success page
-		fmt.Fprintf(w, "<html><body style='font-family: monospace; padding: 2rem; background: #09090b; color: #22c55e;'>")
-		fmt.Fprintf(w, "<h2>> AUTHENTICATION_SUCCESSFUL</h2><p>You can safely close this window and return to your terminal.</p>")
-		fmt.Fprintf(w, "</body></html>")
-
+		fmt.Fprintf(w, `<html><body style="font-family:monospace;padding:2rem;background:#09090b;color:#22c55e;">`)
+		fmt.Fprintf(w, `<h2>> AUTHENTICATION_SUCCESSFUL</h2><p>You can close this window and return to your terminal.</p>`)
+		fmt.Fprintf(w, `</body></html>`)
 		tokenChan <- token
 	})
 
@@ -60,27 +55,19 @@ func handleLogin() {
 		}
 	}()
 
-	// Trigger the browser
 	redirectURI := fmt.Sprintf("http://localhost:%s/callback", cliPort)
 	loginURL := fmt.Sprintf("%s?redirect_uri=%s&state=cli-auth-request", apiLoginURL, redirectURI)
 	openBrowser(loginURL)
 
 	var token string
-
-	// 2. Wrap the blocking channel in the TUI Loader!
-	// This will show a clean dot spinner while the user completes the flow in the browser.
 	_ = tui.RunLoader("Waiting for browser authentication...", func() {
-		token = <-tokenChan // The spinner spins until this channel receives the token
+		token = <-tokenChan
 	})
 
-	// Save token utilizing Viper
 	saveToken(token)
-
-	// Clean up
 	server.Shutdown(context.Background())
 
-	// 3. Use ShowSuccess for that clean, green checkmark
-	tui.ShowSuccess("Successfully logged in! Your CLI is ready to deploy.")
+	tui.ShowSuccess("Authenticated. Your CLI is ready to deploy.")
 }
 
 func openBrowser(url string) {
@@ -96,8 +83,7 @@ func openBrowser(url string) {
 		err = fmt.Errorf("unsupported platform")
 	}
 	if err != nil {
-		// Use ShowError for consistency
-		tui.ShowError(fmt.Sprintf("Failed to open browser. Please manually navigate to: %s", url))
+		tui.ShowError(fmt.Sprintf("Could not open browser. Navigate manually to: %s", url))
 	}
 }
 
@@ -105,13 +91,12 @@ func saveToken(token string) {
 	viper.Set("token", token)
 
 	home, _ := os.UserHomeDir()
-	configDir := filepath.Join(home, ".platform")
+	configDir := filepath.Join(home, ".plat")
 	os.MkdirAll(configDir, 0755)
 
 	configPath := filepath.Join(configDir, "config.json")
-
 	if err := viper.WriteConfigAs(configPath); err != nil {
-		tui.ShowError(fmt.Sprintf("Failed to save configuration: %v", err))
+		tui.ShowError(fmt.Sprintf("Failed to save credentials: %v", err))
 		os.Exit(1)
 	}
 }

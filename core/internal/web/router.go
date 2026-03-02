@@ -13,28 +13,30 @@ func (h *Handler) Routes() chi.Router {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
-	// --- Serve Static Assets (CSS, JS, Images) ---
-	// This tells the router to serve files from your local "web/ui/static" folder
-	// whenever a browser requests a URL starting with "/static/"
+	// Static assets
 	fileServer := http.FileServer(http.Dir("internal/web/ui/static"))
 	router.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 
-	// --- Public Routes ---
+	// Public routes
 	router.Get("/", h.Splash)
+	router.Get("/pricing", h.Pricing)
 	router.Get("/healthz", h.Healthz)
-	router.Connect("/dashboard", h.Dashboard)
+	router.Get("/docs", h.Docs)
+	router.Get("/docs/*", h.Docs)
 
-	// --- Authentication Flow ---
+	// Authentication flow — must be full page navigations, never HTMX
 	router.Route("/auth", func(auth chi.Router) {
 		auth.Get("/login", h.AuthLogin)
 		auth.Get("/callback", h.AuthCallback)
-		auth.Get("/logout", h.AuthLogout)
+		auth.Get("/logout", h.AuthLogout)  // kept for direct URL navigation
+		auth.Post("/logout", h.AuthLogout) // form POST from the Sign Out button
 	})
 
-	// --- Protected Dashboard Routes ---
+	// Protected routes — all behind RequireAuth middleware
 	router.Group(func(protected chi.Router) {
 		protected.Use(h.RequireAuth)
-		// protected.Get("/dashboard", h.Dashboard)
+		protected.Get("/dashboard", h.Dashboard)
+		protected.Get("/settings", h.Settings)
 	})
 
 	return router

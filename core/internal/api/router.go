@@ -18,6 +18,8 @@ func (h *handler) Routes() chi.Router {
 		v1.Route("/auth", func(auth chi.Router) {
 			auth.Get("/login", h.authLogin)
 			auth.Get("/callback", h.authCallback)
+			// Internal: called by the web BFF to provision a user after WorkOS OAuth
+			auth.With(h.requireInternal).Post("/provision", h.provisionUser)
 		})
 
 		// --- RPC Routes (Core API Platform) ---

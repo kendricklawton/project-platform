@@ -17,8 +17,8 @@ func customTheme() *huh.Theme {
 	return t
 }
 
-// PromptNewProject asks the user for details to scaffold a project
-func PromptNewProject() (name string, framework string, err error) {
+// PromptNewProject asks for a project name and language (Go or Rust only).
+func PromptNewProject() (name string, lang string, err error) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -32,20 +32,17 @@ func PromptNewProject() (name string, framework string, err error) {
 				}),
 
 			huh.NewSelect[string]().
-				Title("Framework").
+				Title("Language").
 				Options(
-					huh.NewOption("Next.js", "nextjs"),
-					huh.NewOption("Go API", "go"),
-					huh.NewOption("Remix", "remix"),
-					huh.NewOption("Docker (Dockerfile)", "docker"),
-					huh.NewOption("Static HTML", "static"),
+					huh.NewOption("Go", "go"),
+					huh.NewOption("Rust", "rust"),
 				).
-				Value(&framework),
+				Value(&lang),
 		),
 	).WithTheme(customTheme())
 
 	err = form.Run()
-	return name, framework, err
+	return name, lang, err
 }
 
 // Confirm asks a simple Yes/No question

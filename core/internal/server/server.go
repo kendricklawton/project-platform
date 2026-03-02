@@ -31,7 +31,7 @@ func New(cfg *config.ServerConfig, store db.Store, k8sClient *k8s.Client) *Serve
 		Auth: authSvc,
 	}
 
-	apiHandler := api.NewHandler(k8sClient, store, cfg.WorkOSAPIKey, cfg.WorkOSClientID, registry)
+	apiHandler := api.NewHandler(k8sClient, store, cfg.WorkOSAPIKey, cfg.WorkOSClientID, cfg.InternalSecret, registry)
 
 	router := apiHandler.Routes()
 

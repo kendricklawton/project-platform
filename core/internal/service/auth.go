@@ -36,8 +36,14 @@ func (s *AuthService) ProvisionUser(ctx context.Context, p UserProfile) (*db.Use
 		return nil, err
 	}
 
-	userID, _ := uuid.NewV7()
-	teamID, _ := uuid.NewV7()
+	userID, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("generating user ID: %w", err)
+	}
+	teamID, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("generating team ID: %w", err)
+	}
 	fullName := fmt.Sprintf("%s %s", p.FirstName, p.LastName)
 
 	_, err = s.Store.OnboardUserWithTeam(ctx, db.OnboardUserWithTeamParams{
@@ -48,8 +54,11 @@ func (s *AuthService) ProvisionUser(ctx context.Context, p UserProfile) (*db.Use
 		Name_2: fmt.Sprintf("%s's Team", p.FirstName),
 		Slug:   fmt.Sprintf("%s-team", generateSlug(fullName)),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("onboarding user: %w", err)
+	}
 
-	return &db.User{ID: userID, Email: p.Email, Name: fullName}, err
+	return &db.User{ID: userID, Email: p.Email, Name: fullName}, nil
 }
 
 func generateSlug(name string) string {

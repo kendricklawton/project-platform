@@ -3,6 +3,22 @@
 @theme {
     --font-mono: "Roboto Mono", monospace;
     --animate-loading: loading 2s ease-in-out infinite;
+    --animate-corner-ripple: corner-ripple 8s ease-out infinite;
+
+    /* == ATOM ONE DARK PALETTE == */
+    --color-atom-bg: #282c34; /* Main Background */
+    --color-atom-surface: #21252b; /* Slightly darker for panels/dropdowns */
+    --color-atom-border: #181a1f; /* Deep border color */
+    --color-atom-fg: #abb2bf; /* Main text */
+    --color-atom-muted: #5c6370; /* Comments / muted text */
+
+    /* Syntax Accents */
+    --color-atom-green: #98c379; /* Strings */
+    --color-atom-blue: #61afef; /* Functions */
+    --color-atom-red: #e06c75; /* Keywords */
+    --color-atom-yellow: #e5c07b; /* Classes */
+    --color-atom-purple: #c678dd; /* Control flow */
+    --color-atom-cyan: #56b6c2; /* Variables */
 
     @keyframes loading {
         0% {
@@ -18,7 +34,189 @@
             margin-left: 100%;
         }
     }
+
+    @keyframes corner-ripple {
+        0% {
+            transform: scale(0);
+            opacity: 1;
+        }
+        100% {
+            transform: scale(3);
+            opacity: 0;
+        }
+    }
 }
 
-/* Enable manual class-based dark mode toggling */
 @variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   DOCS PROSE — styles for goldmark-rendered markdown HTML
+   ============================================================ */
+.docs-prose {
+    color: #4b5563;
+    line-height: 1.75;
+    font-size: 0.875rem;
+    font-family: "Roboto Mono", monospace;
+}
+.dark .docs-prose {
+    color: #abb2bf;
+}
+
+/* Headings */
+.docs-prose h1,
+.docs-prose h2,
+.docs-prose h3,
+.docs-prose h4 {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #111827;
+}
+.dark .docs-prose h1,
+.dark .docs-prose h2,
+.dark .docs-prose h3,
+.dark .docs-prose h4 {
+    color: #dde1e8;
+}
+.docs-prose h1 { font-size: 1.5rem; margin-top: 0; }
+.docs-prose h2 { font-size: 1.125rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.4rem; }
+.docs-prose h3 { font-size: 0.9375rem; }
+.dark .docs-prose h2 { border-bottom-color: #3e4451; }
+
+/* Paragraphs */
+.docs-prose p {
+    margin-bottom: 1rem;
+}
+
+/* Links */
+.docs-prose a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.dark .docs-prose a {
+    color: #61afef;
+}
+.docs-prose a:hover {
+    opacity: 0.8;
+}
+
+/* Inline code */
+.docs-prose :not(pre) > code {
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #dc2626;
+    border-radius: 2px;
+    padding: 0.1em 0.35em;
+    font-size: 0.8125rem;
+    font-family: "Roboto Mono", monospace;
+}
+.dark .docs-prose :not(pre) > code {
+    background-color: #21252b;
+    border-color: #3e4451;
+    color: #e06c75;
+}
+
+/* Code blocks */
+.docs-prose pre {
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 2px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+.dark .docs-prose pre {
+    background-color: #21252b;
+    border-color: #3e4451;
+}
+.docs-prose pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #374151;
+    font-family: "Roboto Mono", monospace;
+}
+.dark .docs-prose pre code {
+    color: #abb2bf;
+}
+
+/* Lists */
+.docs-prose ul,
+.docs-prose ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+.docs-prose ul { list-style-type: disc; }
+.docs-prose ol { list-style-type: decimal; }
+.docs-prose li { margin-bottom: 0.4rem; }
+
+/* Blockquotes (used for Aside/callout conversions) */
+.docs-prose blockquote {
+    border-left: 3px solid #3b82f6;
+    background-color: rgba(59, 130, 246, 0.05);
+    margin: 1.25rem 0;
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    color: #374151;
+}
+.dark .docs-prose blockquote {
+    border-left-color: #61afef;
+    background-color: rgba(97, 175, 239, 0.06);
+    color: #abb2bf;
+}
+.docs-prose blockquote p { margin-bottom: 0; }
+.docs-prose blockquote strong { color: #61afef; }
+
+/* Tables */
+.docs-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.25rem;
+    font-size: 0.8125rem;
+}
+.docs-prose th {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.75rem;
+    color: #374151;
+}
+.dark .docs-prose th {
+    background-color: #21252b;
+    border-color: #3e4451;
+    color: #abb2bf;
+}
+.docs-prose td {
+    border: 1px solid #e5e7eb;
+    padding: 0.5rem 0.75rem;
+    color: #374151;
+}
+.dark .docs-prose td {
+    border-color: #3e4451;
+    color: #abb2bf;
+}
+.docs-prose tr:nth-child(even) td {
+    background-color: #f9fafb;
+}
+.dark .docs-prose tr:nth-child(even) td {
+    background-color: rgba(33, 37, 43, 0.5);
+}
+
+/* Horizontal rule */
+.docs-prose hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 2rem 0;
+}
+.dark .docs-prose hr {
+    border-top-color: #3e4451;
+}

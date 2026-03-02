@@ -2,7 +2,7 @@ package components
 
 templ Layout(title string, userName string) {
 	<!DOCTYPE html>
-	<html lang="en">
+	<html lang="en" class="dark">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -17,23 +17,16 @@ templ Layout(title string, userName string) {
 			// Lucide Icons CDN & HTMX Integration
 			<script src="https://unpkg.com/lucide@latest"></script>
 			<script>
-				// Draw icons on initial page load
-				document.addEventListener("DOMContentLoaded", () => {
-					lucide.createIcons();
-				});
-				// Re-draw icons after any HTMX swap
-				document.addEventListener('htmx:afterSwap', () => {
-					lucide.createIcons();
-				});
+				document.addEventListener("DOMContentLoaded", () => { lucide.createIcons(); });
+				document.addEventListener('htmx:afterSwap', () => { lucide.createIcons(); });
 			</script>
-			// Theme Toggler Logic
+			// Theme Logic
 			<script>
 				if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
 					document.documentElement.classList.add('dark');
 				} else {
 					document.documentElement.classList.remove('dark');
 				}
-
 				window.toggleTheme = function() {
 					if (document.documentElement.classList.contains('dark')) {
 						document.documentElement.classList.remove('dark');
@@ -45,59 +38,165 @@ templ Layout(title string, userName string) {
 				}
 			</script>
 		</head>
-		<body class="bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-300 font-mono flex flex-col min-h-screen transition-colors duration-500 selection:bg-green-500/30">
-			<header class="fixed top-0 left-0 w-full border-b border-zinc-200 dark:border-white/10 bg-zinc-50/90 dark:bg-black/90backdrop-blur-md z-40 transition-colors duration-500">
-				<div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-					// Left Side: Brand & Engine status
-					<div class="flex items-center gap-4">
-						<button hx-get="/" hx-target="#main-content" hx-push-url="true" class="text-lg text-zinc-900 dark:text-zinc-100 uppercase tracking-widest flex items-center gap-3 hover:opacity-70 transition-opacity focus:outline-none cursor-pointer">
-							<div class="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
-							Project Platform
-						</button>
-						<span class="text-zinc-300 dark:text-zinc-800 hidden sm:inline-block">/</span>
-						<span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded-sm hidden sm:inline-block">
-							engine: knative-serving
-						</span>
+		<body class="bg-zinc-50 dark:bg-atom-bg text-zinc-900 dark:text-atom-fg font-mono flex flex-col min-h-screen transition-colors duration-500 selection:bg-atom-blue/30">
+			<header class="fixed top-0 left-0 w-full border-b border-zinc-200 dark:border-atom-border bg-zinc-50/90 dark:bg-atom-bg/90 backdrop-blur-md z-40 transition-colors duration-500">
+				<div class="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+					// Left: Brand + Nav
+					<div class="flex items-center gap-8">
+						<div class="flex items-center gap-3">
+							<button hx-get="/" hx-target="#main-content" hx-push-url="true" class="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest hover:opacity-70 transition-opacity focus:outline-none cursor-pointer">
+								Project Platform
+							</button>
+							<span class="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-atom-muted border border-zinc-200 dark:border-atom-border px-2 py-0.5 uppercase tracking-widest">
+								<span class="text-blue-500 dark:text-atom-blue">Go</span>
+								<span class="opacity-40">·</span>
+								<span class="text-amber-500 dark:text-atom-yellow">Rust</span>
+							</span>
+						</div>
+						// Desktop Navigation
+						<nav class="hidden md:flex items-center gap-6">
+							<a href="/pricing" hx-get="/pricing" hx-target="#main-content" hx-push-url="/pricing" class="text-xs uppercase tracking-widest text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors">Pricing</a>
+							<a href="/docs/getting-started/quickstart" hx-get="/docs/getting-started/quickstart" hx-target="#main-content" hx-push-url="/docs/getting-started/quickstart" class="text-xs uppercase tracking-widest text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors">Docs</a>
+							<a href="#" class="text-xs uppercase tracking-widest text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors">Discord</a>
+						</nav>
 					</div>
-					// Right Side: The Smart User Dropdown
-					// The Dropdown Menu (Forcing right-alignment via inline styles)
-					// Right Side: The Smart User Dropdown
-					<div class="relative" x-data="{ open: false }">
-						<button @click="open = !open" class="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white transition-colors focus:outline-none">
-							<span class="text-xs font-mono uppercase tracking-widest">
+					// Right: GitHub Stars + User Dropdown
+					<div class="flex items-center gap-4">
+						// GitHub Stars — live count from API
+						<a
+							href="https://github.com/kendricklawton/project-platform"
+							target="_blank"
+							x-data="{ stars: null }"
+							x-init="fetch('https://api.github.com/repos/kendricklawton/project-platform').then(r=>r.json()).then(d=>{ stars=d.stargazers_count }).catch(()=>{})"
+							class="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors uppercase tracking-widest"
+						>
+							<i data-lucide="star" width="12" height="12"></i>
+							<span x-text="stars !== null ? stars : 'Star'"></span>
+						</a>
+						// User Dropdown
+						<div class="relative" x-data="{ open: false }">
+							<button @click="open = !open" class="flex items-center gap-2 text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors focus:outline-none">
+								<span class="text-xs font-mono uppercase tracking-widest">
+									if userName != "" {
+										{ userName }
+									} else {
+										GUEST_SYS
+									}
+								</span>
+								<span class="opacity-60 flex items-center">
+									<span x-show="!open"><i data-lucide="chevron-down" width="14" height="14"></i></span>
+									<span x-show="open" style="display: none;"><i data-lucide="chevron-up" width="14" height="14"></i></span>
+								</span>
+							</button>
+							<div x-show="open" @click.away="open = false" x-transition.opacity style="top: 100%; display: none;" class="absolute mt-2 w-48 right-0 py-1 bg-white dark:bg-atom-surface border border-zinc-200 dark:border-atom-border shadow-2xl z-50">
 								if userName != "" {
-									{ userName }
+									<button hx-get="/dashboard" hx-target="#main-content" @click="open = false" class="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">Dashboard</button>
+									<button hx-get="/settings" hx-target="#main-content" @click="open = false" class="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">Settings</button>
+									<div class="border-t border-zinc-200 dark:border-atom-border my-1"></div>
+									<a href="#" target="_blank" @click="open = false" class="flex items-center gap-2 px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">
+										<i data-lucide="message-circle" width="12" height="12"></i>
+										Discord
+									</a>
+									<a href="https://github.com/kendricklawton/project-platform" target="_blank" @click="open = false" class="flex items-center gap-2 px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">
+										<i data-lucide="github" width="12" height="12"></i>
+										GitHub
+									</a>
+									<div class="border-t border-zinc-200 dark:border-atom-border my-1"></div>
+									<form method="post" action="/auth/logout" class="w-full">
+										<button type="submit" class="block w-full text-left px-4 py-2 text-xs text-red-600 dark:text-atom-red hover:bg-red-50 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">Sign Out</button>
+									</form>
 								} else {
-									GUEST_SYS
+									<a href="/auth/login" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">Login</a>
+									<a href="/pricing" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">Pricing</a>
+									<div class="border-t border-zinc-200 dark:border-atom-border my-1"></div>
+									<a href="#" target="_blank" @click="open = false" class="flex items-center gap-2 px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">
+										<i data-lucide="message-circle" width="12" height="12"></i>
+										Discord
+									</a>
+									<a href="https://github.com/kendricklawton/project-platform" target="_blank" @click="open = false" class="flex items-center gap-2 px-4 py-2 text-xs text-zinc-700 dark:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-bg transition-colors uppercase tracking-widest">
+										<i data-lucide="github" width="12" height="12"></i>
+										GitHub
+									</a>
 								}
-							</span>
-							<span class="opacity-70 mt-0.5 flex items-center">
-								<span x-show="!open"><i data-lucide="chevron-down" width="16" height="16"></i></span>
-								<span x-show="open" style="display: none;"><i data-lucide="chevron-up" width="16" height="16"></i></span>
-							</span>
-						</button>
-						// The Dropdown Menu (Using right-0 and top-full to snap it to the bottom-right of the button)
-						<div x-show="open" @click.away="open = false" x-transition.opacity style="top: 100%;" class="absolute mt-2 w-48  px-1 dark:bg-black border border-zinc-300 dark:border-white/10 shadow-2xl z-50 py-1 right-0">
-							if userName != "" {
-								<button hx-get="/dashboard" hx-target="#main-content" @click="open = false" class="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest">[ Dashboard ]</button>
-								<button hx-get="/settings" hx-target="#main-content" @click="open = false" class="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest">[ Settings ]</button>
-							} else {
-								<a href="/auth/login" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest">[ Login ]</a>
-							}
-							<div class="border-t border-zinc-200 dark:border-white/10 my-1"></div>
-							<button @click="toggleTheme()" class="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors uppercase tracking-widest">[ Toggle Theme ]</button>
-							if userName != "" {
-								<div class="border-t border-zinc-200 dark:border-white/10 my-1"></div>
-								<a href="/auth/logout" @click="open = false" class="block w-full text-left px-4 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-white/5 transition-colors uppercase tracking-widest">[ Logout ]</a>
-							}
+							</div>
 						</div>
 					</div>
 				</div>
 			</header>
-			// The Dynamic Content Area
-			<main id="main-content" class="w-full max-w-5xl mx-auto pt-28 px-4 sm:px-6 pb-12">
+			// Main Content
+			<main id="main-content" class="w-full max-w-7xl mx-auto pt-24 px-4 sm:px-6 pb-12 flex-1">
 				{ children... }
 			</main>
+			// Footer
+			<footer class="border-t border-zinc-200 dark:border-atom-border bg-zinc-50 dark:bg-atom-bg transition-colors duration-500">
+				<div class="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+					// Top: Brand + Link Columns
+					<div class="grid grid-cols-2 md:grid-cols-5 gap-8 pb-10 border-b border-zinc-200 dark:border-atom-border">
+						// Brand
+						<div class="col-span-2 md:col-span-1 flex flex-col gap-2">
+							<span class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Project Platform</span>
+							<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted leading-relaxed">Deploy, scale, and manage services — built for developers.</span>
+						</div>
+						// Product
+						<div class="flex flex-col gap-3">
+							<span class="text-[10px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Product</span>
+							<a href="/pricing" hx-get="/pricing" hx-target="#main-content" hx-push-url="/pricing" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Pricing</a>
+							<a href="/docs/getting-started/quickstart" hx-get="/docs/getting-started/quickstart" hx-target="#main-content" hx-push-url="/docs/getting-started/quickstart" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Docs</a>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Changelog</a>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Status</a>
+						</div>
+						// Developers
+						<div class="flex flex-col gap-3">
+							<span class="text-[10px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Developers</span>
+							<a href="/docs/getting-started/quickstart" hx-get="/docs/getting-started/quickstart" hx-target="#main-content" hx-push-url="/docs/getting-started/quickstart" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Quickstart</a>
+							<a href="/docs/reference/cli" hx-get="/docs/reference/cli" hx-target="#main-content" hx-push-url="/docs/reference/cli" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">CLI Reference</a>
+							<a href="/docs/reference/api" hx-get="/docs/reference/api" hx-target="#main-content" hx-push-url="/docs/reference/api" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">API Reference</a>
+							<a href="https://github.com/kendricklawton/project-platform" target="_blank" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">GitHub</a>
+						</div>
+						// Company
+						<div class="flex flex-col gap-3">
+							<span class="text-[10px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Company</span>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">About</a>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Blog</a>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Careers</a>
+							<a href="#" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Discord</a>
+						</div>
+						// Legal
+						<div class="flex flex-col gap-3">
+							<span class="text-[10px] font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Legal</span>
+							<a href="/legal/privacy" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Privacy Policy</a>
+							<a href="/legal/terms" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Terms of Service</a>
+							<a href="/legal/dpa" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">DPA</a>
+							<a href="/legal/cookies" class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">Cookie Policy</a>
+						</div>
+					</div>
+					// Bottom: Copyright + Social
+					<div class="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+						<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted">© 2026 Machine Name LLC. All rights reserved.</span>
+						<div class="flex items-center gap-4">
+							<a href="https://github.com/kendricklawton/project-platform" target="_blank" class="text-zinc-400 dark:text-atom-muted hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">
+								<i data-lucide="github" width="14" height="14"></i>
+							</a>
+							<a href="#" target="_blank" class="text-zinc-400 dark:text-atom-muted hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">
+								<i data-lucide="twitter" width="14" height="14"></i>
+							</a>
+							<a href="#" target="_blank" class="text-zinc-400 dark:text-atom-muted hover:text-zinc-700 dark:hover:text-atom-fg transition-colors">
+								<i data-lucide="message-circle" width="14" height="14"></i>
+							</a>
+						</div>
+					</div>
+				</div>
+			</footer>
+			// Theme Toggle — fixed bottom-right
+			<div class="fixed bottom-6 right-6 z-50" x-data="{ isDark: document.documentElement.classList.contains('dark') }">
+				<button
+					@click="toggleTheme(); isDark = !isDark"
+					class="w-9 h-9 flex items-center justify-center border border-zinc-300 dark:border-atom-border bg-zinc-50 dark:bg-atom-surface text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:border-zinc-500 dark:hover:border-atom-fg transition-colors shadow-lg"
+				>
+					<span x-show="isDark"><i data-lucide="sun" width="14" height="14"></i></span>
+					<span x-show="!isDark" style="display: none;"><i data-lucide="moon" width="14" height="14"></i></span>
+				</button>
+			</div>
 		</body>
 	</html>
 }

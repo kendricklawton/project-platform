@@ -348,15 +348,14 @@ tasks:
         go run github.com/air-verse/air@latest -c .air.web.toml
 
   dev:cli:
-    desc: "Run the CLI locally with live-reload (Air)"
+    desc: "Build and run the plat CLI (usage: task dev:cli -- <args>)"
     dir: core
     cmds:
-      - go run github.com/air-verse/air@latest -c .air.cli.toml
+      - go run ./cmd/platform-cli/main.go {{.CLI_ARGS}}
 
   dev:
     desc: "Run all services locally with live-reload (Air)"
-    cmds:
-      - task: dev:server
-      # - task: dev:worker
-      - task: dev:web
-      # - task: dev:cli
+    deps:
+      - dev:server
+      - dev:web
+
