@@ -243,7 +243,66 @@ templ DashboardSettingsPage(userName string, slug string) {
 }
 
 templ DashboardSettingsContent() {
-	@dashPlaceholderPage("settings", "Settings", "Account and workspace settings will appear here.")
+	<div class="p-6 lg:p-8 flex flex-col gap-6">
+		<h1 class="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Team Settings</h1>
+		// Team identity
+		<div class="border border-zinc-200 dark:border-atom-border">
+			<div class="px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface">
+				<span class="text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest">Identity</span>
+			</div>
+			<div class="flex flex-col gap-0 divide-y divide-zinc-200 dark:divide-atom-border">
+				<div class="flex items-center justify-between px-5 py-4">
+					<div class="flex flex-col gap-0.5">
+						<span class="text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest">Team Name</span>
+						<span class="text-[11px] text-zinc-500 dark:text-atom-muted">Display name for this team.</span>
+					</div>
+					<input
+						type="text"
+						placeholder="My Team"
+						class="w-48 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg text-xs font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none focus:border-zinc-400 dark:focus:border-atom-fg"
+					/>
+				</div>
+				<div class="flex items-center justify-between px-5 py-4">
+					<div class="flex flex-col gap-0.5">
+						<span class="text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest">Slug</span>
+						<span class="text-[11px] text-zinc-500 dark:text-atom-muted">Used in URLs. Cannot be changed.</span>
+					</div>
+					<span class="text-[11px] font-mono text-zinc-500 dark:text-atom-muted px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface">team-slug</span>
+				</div>
+			</div>
+		</div>
+		// Members
+		<div class="border border-zinc-200 dark:border-atom-border">
+			<div class="px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface flex items-center justify-between">
+				<span class="text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest">Members</span>
+				<button class="px-3 py-1 bg-zinc-900 dark:bg-white text-[10px] font-bold text-white dark:text-zinc-900 uppercase tracking-widest hover:opacity-80 transition-opacity">
+					Invite
+				</button>
+			</div>
+			<div class="flex flex-col items-center justify-center py-12 gap-3">
+				<i data-lucide="users" width="16" height="16" class="text-zinc-300 dark:text-atom-border"></i>
+				<span class="text-[11px] font-mono text-zinc-500 dark:text-atom-muted">Member management coming soon.</span>
+			</div>
+		</div>
+		// Danger zone
+		<div class="border border-red-200 dark:border-atom-red/30">
+			<div class="px-5 py-3 border-b border-red-200 dark:border-atom-red/30 bg-red-50 dark:bg-atom-red/5">
+				<span class="text-[10px] font-bold text-red-500 dark:text-atom-red uppercase tracking-widest">Danger Zone</span>
+			</div>
+			<div class="flex items-center justify-between px-5 py-4">
+				<div class="flex flex-col gap-0.5">
+					<span class="text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest">Delete Team</span>
+					<span class="text-[11px] text-zinc-500 dark:text-atom-muted">Permanently deletes all projects, services, and deployments.</span>
+				</div>
+				<button
+					class="px-4 py-1.5 border border-red-300 dark:border-atom-red/50 text-[10px] font-bold text-red-600 dark:text-atom-red uppercase tracking-widest hover:bg-red-50 dark:hover:bg-atom-red/10 transition-colors"
+					disabled
+				>
+					Delete Team
+				</button>
+			</div>
+		</div>
+	</div>
 }
 
 // ── SHARED COMPONENTS ────────────────────────────────────────────────────────

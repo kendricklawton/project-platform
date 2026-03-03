@@ -74,7 +74,7 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = DashNavItem("settings", "Settings", "/"+slug+"/settings").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = DashNavItem("settings", "Team Settings", "/"+slug+"/settings").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -116,7 +116,7 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-900 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors w-full\"><i data-lucide=\"plus\" width=\"11\" height=\"11\"></i> New Project</a></div></div></div><div class=\"ml-auto flex items-center divide-x divide-zinc-200 dark:divide-atom-border h-full\"><button onclick=\"toggleTheme()\" class=\"h-full px-4 flex items-center text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors\"><i data-lucide=\"sun\" width=\"14\" height=\"14\" class=\"dark:hidden\"></i> <i data-lucide=\"moon\" width=\"14\" height=\"14\" class=\"hidden dark:block\"></i></button><div class=\"h-full px-4 flex items-center\"><div class=\"w-7 h-7 bg-zinc-900 dark:bg-white flex items-center justify-center shrink-0\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-900 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors w-full\"><i data-lucide=\"plus\" width=\"11\" height=\"11\"></i> New Project</a></div></div></div><div class=\"ml-auto h-full flex items-center\" x-data=\"{ userOpen: false }\" @click.outside=\"userOpen = false\" @keydown.escape.window=\"userOpen = false\"><div class=\"relative h-full flex items-center\"><button @click=\"userOpen = !userOpen\" class=\"h-full px-4 flex items-center hover:bg-zinc-100 dark:hover:bg-atom-surface transition-colors\"><div class=\"w-7 h-7 bg-zinc-900 dark:bg-white flex items-center justify-center shrink-0\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -128,7 +128,7 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(string([]rune(userName)[0:1]))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 206, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 208, Col: 130}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -139,7 +139,20 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div></div></header><div id=\"dashboard-content\" class=\"flex-1 min-w-0 overflow-y-auto\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></button><div x-show=\"userOpen\" x-cloak class=\"absolute right-0 top-full w-56 z-50 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg shadow-lg\"><div class=\"px-4 py-3 border-b border-zinc-200 dark:border-atom-border\"><span class=\"block text-[11px] font-bold text-zinc-900 dark:text-white truncate\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(userName)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 219, Col: 100}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</span></div><a href=\"/account\" hx-get=\"/account\" hx-target=\"#dashboard-content\" hx-push-url=\"/account\" class=\"flex items-center gap-3 px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest\" @click=\"userOpen = false\"><i data-lucide=\"user\" width=\"13\" height=\"13\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> Account Settings</a><button onclick=\"toggleTheme()\" class=\"flex items-center gap-3 w-full px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest\" @click=\"userOpen = false\"><i data-lucide=\"sun\" width=\"13\" height=\"13\" class=\"text-zinc-400 dark:text-atom-muted shrink-0 dark:hidden\"></i> <i data-lucide=\"moon\" width=\"13\" height=\"13\" class=\"text-zinc-400 dark:text-atom-muted shrink-0 hidden dark:block\"></i> Toggle Theme</button><div class=\"border-t border-zinc-200 dark:border-atom-border\"></div><form method=\"POST\" action=\"/auth/logout\"><button type=\"submit\" class=\"flex items-center gap-3 w-full px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest\"><i data-lucide=\"log-out\" width=\"13\" height=\"13\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> Sign Out</button></form></div></div></div></header><div id=\"dashboard-content\" class=\"flex-1 min-w-0 overflow-y-auto\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -147,7 +160,7 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div><div x-show=\"paletteOpen\" x-cloak class=\"fixed inset-0 z-50\" @keydown.escape.window=\"paletteOpen = false\"><div class=\"absolute inset-0 bg-black/50 backdrop-blur-sm\" @click=\"paletteOpen = false\"></div><div class=\"relative z-10 w-full max-w-lg mx-auto mt-[15vh]\"><div class=\"border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg shadow-2xl\" @click.outside=\"paletteOpen = false\"><div class=\"flex items-center gap-3 px-4 py-3 border-b border-zinc-200 dark:border-atom-border\"><i data-lucide=\"search\" width=\"15\" height=\"15\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <input type=\"text\" placeholder=\"Type a command or search...\" class=\"flex-1 bg-transparent text-sm font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none\" x-ref=\"paletteInput\" x-init=\"$watch('paletteOpen', val => { if (val) $nextTick(() => $refs.paletteInput.focus()) })\"> <kbd class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted px-1.5 py-0.5 border border-zinc-200 dark:border-atom-border\">ESC</kbd></div><div class=\"py-2 max-h-80 overflow-y-auto\"><div class=\"px-3 py-1\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Navigation</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div><div x-show=\"paletteOpen\" x-cloak class=\"fixed inset-0 z-50\" @keydown.escape.window=\"paletteOpen = false\"><div class=\"absolute inset-0 bg-black/50 backdrop-blur-sm\" @click=\"paletteOpen = false\"></div><div class=\"relative z-10 w-full max-w-lg mx-auto mt-[15vh]\"><div class=\"border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg shadow-2xl\" @click.outside=\"paletteOpen = false\"><div class=\"flex items-center gap-3 px-4 py-3 border-b border-zinc-200 dark:border-atom-border\"><i data-lucide=\"search\" width=\"15\" height=\"15\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <input type=\"text\" placeholder=\"Type a command or search...\" class=\"flex-1 bg-transparent text-sm font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none\" x-ref=\"paletteInput\" x-init=\"$watch('paletteOpen', val => { if (val) $nextTick(() => $refs.paletteInput.focus()) })\"> <kbd class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted px-1.5 py-0.5 border border-zinc-200 dark:border-atom-border\">ESC</kbd></div><div class=\"py-2 max-h-80 overflow-y-auto\"><div class=\"px-3 py-1\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Navigation</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -175,11 +188,11 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = DashPaletteItem("settings", "Settings", "/"+slug+"/settings").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = DashPaletteItem("settings", "Team Settings", "/"+slug+"/settings").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"my-1 mx-3 border-t border-zinc-100 dark:border-atom-border\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"my-1 mx-3 border-t border-zinc-100 dark:border-atom-border\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -187,7 +200,7 @@ func DashboardLayout(title string, userName string, slug string) templ.Component
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div></div></div></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div></div></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -211,77 +224,77 @@ func DashPaletteItem(icon string, label string, href string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var6 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var6 == nil {
-			templ_7745c5c3_Var6 = templ.NopComponent
+		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var7 == nil {
+			templ_7745c5c3_Var7 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var7 templ.SafeURL
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var8 templ.SafeURL
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 274, Col: 28}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" hx-get=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(href)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 275, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 320, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" hx-target=\"#dashboard-content\" hx-push-url=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 277, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 321, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" class=\"flex items-center gap-3 px-4 py-2.5 mx-1 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface uppercase tracking-widest\" @click=\"paletteOpen = false\"><i data-lucide=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" hx-target=\"#dashboard-content\" hx-push-url=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
-		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 281, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 323, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" width=\"15\" height=\"15\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" class=\"flex items-center gap-3 px-4 py-2.5 mx-1 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface uppercase tracking-widest\" @click=\"paletteOpen = false\"><i data-lucide=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 282, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 327, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</span></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" width=\"15\" height=\"15\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <span>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var12 string
+		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 328, Col: 15}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -305,90 +318,90 @@ func DashNavItem(icon string, label string, href string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var12 == nil {
-			templ_7745c5c3_Var12 = templ.NopComponent
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var13 templ.SafeURL
-		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var14 templ.SafeURL
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 288, Col: 28}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-dash-href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(href)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 289, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 334, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-dash-href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 290, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 335, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" hx-target=\"#dashboard-content\" hx-push-url=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 292, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 336, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" class=\"flex items-center py-2.5 text-xs text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface border-l-2 border-transparent transition-colors uppercase tracking-widest\" :class=\"sidebarOpen ? 'px-4 gap-3' : 'justify-center px-1'\" @click=\"if (window.innerWidth < 1024) sidebarOpen = false\"><i data-lucide=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" hx-target=\"#dashboard-content\" hx-push-url=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 297, Col: 23}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 338, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" width=\"15\" height=\"15\" class=\"shrink-0\"></i> <span x-show=\"sidebarOpen\" class=\"truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" class=\"flex items-center py-2.5 text-xs text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface border-l-2 border-transparent transition-colors uppercase tracking-widest\" :class=\"sidebarOpen ? 'px-4 gap-3' : 'justify-center px-1'\" @click=\"if (window.innerWidth < 1024) sidebarOpen = false\"><i data-lucide=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 298, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 343, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" width=\"15\" height=\"15\" class=\"shrink-0\"></i> <span x-show=\"sidebarOpen\" class=\"truncate\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var19 string
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 344, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</span></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -412,51 +425,51 @@ func DashSidebarAction(icon string, label string, href string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<form method=\"POST\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<form method=\"POST\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var20 templ.SafeURL
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
+		var templ_7745c5c3_Var21 templ.SafeURL
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(href))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 303, Col: 49}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\"><button type=\"submit\" class=\"flex items-center w-full py-2.5 text-xs text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface border-l-2 border-transparent transition-colors uppercase tracking-widest\" :class=\"sidebarOpen ? 'px-4 gap-3' : 'justify-center px-1'\"><i data-lucide=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 309, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 349, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" width=\"15\" height=\"15\" class=\"shrink-0\"></i> <span x-show=\"sidebarOpen\" class=\"truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\"><button type=\"submit\" class=\"flex items-center w-full py-2.5 text-xs text-zinc-500 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface border-l-2 border-transparent transition-colors uppercase tracking-widest\" :class=\"sidebarOpen ? 'px-4 gap-3' : 'justify-center px-1'\"><i data-lucide=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var22 string
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 310, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 355, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</span></button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" width=\"15\" height=\"15\" class=\"shrink-0\"></i> <span x-show=\"sidebarOpen\" class=\"truncate\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var23 string
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/components/dashboard_layout.templ`, Line: 356, Col: 54}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</span></button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

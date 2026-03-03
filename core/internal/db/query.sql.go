@@ -314,13 +314,13 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 const createTeamWithOwner = `-- name: CreateTeamWithOwner :one
 
 WITH new_team AS (
-    INSERT INTO teams (id, name, slug) VALUES ($1, $2, $3) RETURNING id, name, slug, stripe_subscription_id, created_at, updated_at
+    INSERT INTO teams (id, name, slug) VALUES ($1, $2, $3) RETURNING id, name, slug, stripe_subscription_id, deleted_at, created_at, updated_at
 ),
 new_member AS (
     INSERT INTO team_members (team_id, user_id, role)
     SELECT id, $4, 'owner' FROM new_team
 )
-SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM new_team
+SELECT id, name, slug, stripe_subscription_id, deleted_at, created_at, updated_at FROM new_team
 `
 
 type CreateTeamWithOwnerParams struct {
@@ -335,6 +335,7 @@ type CreateTeamWithOwnerRow struct {
 	Name                 string             `json:"name"`
 	Slug                 string             `json:"slug"`
 	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	DeletedAt            pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
@@ -357,6 +358,7 @@ func (q *Queries) CreateTeamWithOwner(ctx context.Context, arg CreateTeamWithOwn
 		&i.Name,
 		&i.Slug,
 		&i.StripeSubscriptionID,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -366,7 +368,7 @@ func (q *Queries) CreateTeamWithOwner(ctx context.Context, arg CreateTeamWithOwn
 const createUser = `-- name: CreateUser :one
 
 
-INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -393,6 +395,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -836,7 +839,7 @@ func (q *Queries) GetStaleBuilds(ctx context.Context) ([]Deployment, error) {
 }
 
 const getTeam = `-- name: GetTeam :one
-SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM teams WHERE id = $1
+SELECT id, name, slug, stripe_subscription_id, deleted_at, created_at, updated_at FROM teams WHERE id = $1
 `
 
 func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
@@ -847,6 +850,7 @@ func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
 		&i.Name,
 		&i.Slug,
 		&i.StripeSubscriptionID,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -854,7 +858,7 @@ func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
 }
 
 const getTeamBySlug = `-- name: GetTeamBySlug :one
-SELECT id, name, slug, stripe_subscription_id, created_at, updated_at FROM teams WHERE slug = $1
+SELECT id, name, slug, stripe_subscription_id, deleted_at, created_at, updated_at FROM teams WHERE slug = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetTeamBySlug(ctx context.Context, slug string) (Team, error) {
@@ -865,6 +869,7 @@ func (q *Queries) GetTeamBySlug(ctx context.Context, slug string) (Team, error) 
 		&i.Name,
 		&i.Slug,
 		&i.StripeSubscriptionID,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -991,9 +996,9 @@ func (q *Queries) GetTeamUsageSummary(ctx context.Context, arg GetTeamUsageSumma
 }
 
 const getTeamsForUser = `-- name: GetTeamsForUser :many
-SELECT t.id, t.name, t.slug, t.stripe_subscription_id, t.created_at, t.updated_at, tm.role FROM teams t
+SELECT t.id, t.name, t.slug, t.stripe_subscription_id, t.deleted_at, t.created_at, t.updated_at, tm.role FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.deleted_at IS NULL
 ORDER BY t.name
 `
 
@@ -1002,6 +1007,7 @@ type GetTeamsForUserRow struct {
 	Name                 string             `json:"name"`
 	Slug                 string             `json:"slug"`
 	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	DeletedAt            pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	Role                 string             `json:"role"`
@@ -1021,6 +1027,7 @@ func (q *Queries) GetTeamsForUser(ctx context.Context, userID uuid.UUID) ([]GetT
 			&i.Name,
 			&i.Slug,
 			&i.StripeSubscriptionID,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Role,
@@ -1036,7 +1043,7 @@ func (q *Queries) GetTeamsForUser(ctx context.Context, userID uuid.UUID) ([]GetT
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
@@ -1049,6 +1056,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1056,7 +1064,7 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -1069,6 +1077,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1852,7 +1861,7 @@ AND EXISTS (
     SELECT 1 FROM team_members tm
     WHERE tm.team_id = $1 AND tm.user_id = $4 AND tm.role = 'owner'
 )
-RETURNING id, name, slug, stripe_subscription_id, created_at, updated_at
+RETURNING id, name, slug, stripe_subscription_id, deleted_at, created_at, updated_at
 `
 
 type UpdateTeamParams struct {
@@ -1875,6 +1884,7 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.Name,
 		&i.Slug,
 		&i.StripeSubscriptionID,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1920,7 +1930,7 @@ func (q *Queries) UpdateTeamMemberRole(ctx context.Context, arg UpdateTeamMember
 }
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
-UPDATE users SET name = $2, avatar_url = $3 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+UPDATE users SET name = $2, avatar_url = $3 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
@@ -1939,6 +1949,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1946,7 +1957,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 }
 
 const updateUserStripeCustomerID = `-- name: UpdateUserStripeCustomerID :one
-UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at
 `
 
 type UpdateUserStripeCustomerIDParams struct {
@@ -1964,6 +1975,7 @@ func (q *Queries) UpdateUserStripeCustomerID(ctx context.Context, arg UpdateUser
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1971,7 +1983,7 @@ func (q *Queries) UpdateUserStripeCustomerID(ctx context.Context, arg UpdateUser
 }
 
 const updateUserTier = `-- name: UpdateUserTier :one
-UPDATE users SET tier = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at
+UPDATE users SET tier = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, deleted_at, created_at, updated_at
 `
 
 type UpdateUserTierParams struct {
@@ -1989,6 +2001,7 @@ func (q *Queries) UpdateUserTier(ctx context.Context, arg UpdateUserTierParams) 
 		&i.AvatarUrl,
 		&i.StripeCustomerID,
 		&i.Tier,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -2054,6 +2067,31 @@ func (q *Queries) UpsertEnvVar(ctx context.Context, arg UpsertEnvVarParams) (Pro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteOrphanedTeams = `-- name: DeleteOrphanedTeams :exec
+UPDATE teams SET deleted_at = NOW() WHERE id IN (
+    SELECT tm.team_id FROM team_members tm
+    WHERE tm.user_id = $1 AND tm.role = 'owner'
+    AND NOT EXISTS (
+        SELECT 1 FROM team_members tm2
+        WHERE tm2.team_id = tm.team_id AND tm2.user_id != $1
+    )
+) AND deleted_at IS NULL
+`
+
+func (q *Queries) DeleteOrphanedTeams(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrphanedTeams, userID)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
 }
 
 const verifyDomain = `-- name: VerifyDomain :one

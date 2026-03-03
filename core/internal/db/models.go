@@ -381,6 +381,7 @@ type Team struct {
 	Name                 string             `json:"name"`
 	Slug                 string             `json:"slug"`
 	StripeSubscriptionID pgtype.Text        `json:"stripe_subscription_id"`
+	DeletedAt            pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
@@ -409,6 +410,7 @@ type User struct {
 	AvatarUrl        pgtype.Text        `json:"avatar_url"`
 	StripeCustomerID pgtype.Text        `json:"stripe_customer_id"`
 	Tier             string             `json:"tier"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }

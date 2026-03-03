@@ -1,13 +1,16 @@
 package web
 
 import (
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/pages"
 	"github.com/kendricklawton/project-platform/gen/go/platform/v1/platformv1connect"
+	"github.com/workos/workos-go/v6/pkg/usermanagement"
 )
 
 // Handler is the Backend-For-Frontend (BFF) controller.
@@ -345,6 +348,64 @@ func (h *Handler) DashboardSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pages.DashboardSettingsPage(userName, slug).Render(r.Context(), w)
+}
+
+// Account renders the account settings page. Requires RequireAuth middleware.
+func (h *Handler) Account(w http.ResponseWriter, r *http.Request) {
+	userName := GetDisplayName(r)
+	email := GetEmail(r)
+	slug := GetSlug(r)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.AccountContent(userName, email, slug).Render(r.Context(), w)
+		return
+	}
+	pages.AccountPage(userName, email, slug).Render(r.Context(), w)
+}
+
+// AccountDelete deletes the authenticated user's account, clears all cookies,
+// revokes the WorkOS session, and redirects to the splash page.
+// Requires the user to confirm by typing their email address.
+func (h *Handler) AccountDelete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetTokenFromContext(r.Context())
+	if !ok || userID == "" {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+	// Require email confirmation matching the stored email cookie
+	expected := GetEmail(r)
+	if expected == "" || r.FormValue("confirm") != expected {
+		http.Error(w, "Confirmation does not match your email address", http.StatusBadRequest)
+		return
+	}
+	if err := h.deleteAccountViaAPI(r.Context(), userID); err != nil {
+		log.Printf("AccountDelete error: %v", err)
+		http.Error(w, "Failed to delete account", http.StatusInternalServerError)
+		return
+	}
+	// Delete the user from WorkOS so they can't re-authenticate without re-registering
+	usermanagement.SetAPIKey(h.WorkOSAPIKey)
+	if wosUID, err := r.Cookie(workosUserIDCookieName); err == nil && wosUID.Value != "" {
+		if err := usermanagement.DeleteUser(r.Context(), usermanagement.DeleteUserOpts{User: wosUID.Value}); err != nil {
+			log.Printf("AccountDelete: failed to delete WorkOS user %s: %v", wosUID.Value, err)
+		}
+	}
+	// Clear all session cookies
+	past := time.Unix(0, 0)
+	for _, name := range []string{SessionCookieName, nameCookieName, emailCookieName, workosUserIDCookieName, slugCookieName, workosSessionCookieName, stateCookieName} {
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1,
+			Expires:  past,
+		})
+	}
+	// Redirect home — WorkOS session is already gone since we deleted the user
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
 }
 
 // Settings renders the protected settings page. Requires RequireAuth middleware.

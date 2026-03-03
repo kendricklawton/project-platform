@@ -49,6 +49,8 @@ func (h *Handler) Routes() chi.Router {
 		protected.Get("/{slug}/domains", h.DashboardDomains)
 		protected.Get("/{slug}/settings", h.DashboardSettings)
 		protected.Get("/settings", h.Settings)
+		protected.Get("/account", h.Account)
+		protected.Post("/account/delete", h.AccountDelete)
 	})
 
 	return router

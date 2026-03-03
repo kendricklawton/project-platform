@@ -61,6 +61,15 @@ func (s *AuthService) ProvisionUser(ctx context.Context, p UserProfile) (*db.Use
 	return &db.User{ID: userID, Email: p.Email, Name: fullName}, nil
 }
 
+func (s *AuthService) DeleteUserWithCleanup(ctx context.Context, userID uuid.UUID) error {
+	return s.Store.ExecTx(ctx, func(q *db.Queries) error {
+		if err := q.DeleteOrphanedTeams(ctx, userID); err != nil {
+			return fmt.Errorf("deleting orphaned teams: %w", err)
+		}
+		return q.DeleteUser(ctx, userID)
+	})
+}
+
 func generateSlug(name string) string {
 	reg := regexp.MustCompile("[^a-z0-9]+")
 	return strings.Trim(reg.ReplaceAllString(strings.ToLower(name), "-"), "-")

@@ -12,10 +12,10 @@
 INSERT INTO users (id, email, name) VALUES ($1, $2, $3) RETURNING *;
 
 -- name: GetUser :one
-SELECT * FROM users WHERE id = $1;
+SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetUserByEmail :one
-SELECT * FROM users WHERE email = $1;
+SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL;
 
 -- name: UpdateUserTier :one
 UPDATE users SET tier = $2 WHERE id = $1 RETURNING *;
@@ -25,6 +25,19 @@ UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING *;
 
 -- name: UpdateUserProfile :one
 UPDATE users SET name = $2, avatar_url = $3 WHERE id = $1 RETURNING *;
+
+-- name: DeleteOrphanedTeams :exec
+UPDATE teams SET deleted_at = NOW() WHERE id IN (
+    SELECT tm.team_id FROM team_members tm
+    WHERE tm.user_id = $1 AND tm.role = 'owner'
+    AND NOT EXISTS (
+        SELECT 1 FROM team_members tm2
+        WHERE tm2.team_id = tm.team_id AND tm2.user_id != $1
+    )
+) AND deleted_at IS NULL;
+
+-- name: DeleteUser :exec
+UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL;
 
 -- ============================================================================
 -- TEAMS
@@ -46,12 +59,12 @@ SELECT * FROM new_team;
 SELECT * FROM teams WHERE id = $1;
 
 -- name: GetTeamBySlug :one
-SELECT * FROM teams WHERE slug = $1;
+SELECT * FROM teams WHERE slug = $1 AND deleted_at IS NULL;
 
 -- name: GetTeamsForUser :many
 SELECT t.*, tm.role FROM teams t
 JOIN team_members tm ON t.id = tm.team_id
-WHERE tm.user_id = $1
+WHERE tm.user_id = $1 AND t.deleted_at IS NULL
 ORDER BY t.name;
 
 -- name: UpdateTeam :one

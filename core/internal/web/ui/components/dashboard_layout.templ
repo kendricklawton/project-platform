@@ -118,7 +118,7 @@ templ DashboardLayout(title string, userName string, slug string) {
 					@DashNavItem("key", "Secrets", "/"+slug+"/secrets")
 					<div class="my-1 border-t border-zinc-200 dark:border-atom-border" :class="sidebarOpen ? 'mx-1' : 'mx-0'"></div>
 					@DashNavItem("globe", "Domains", "/"+slug+"/domains")
-					@DashNavItem("settings", "Settings", "/"+slug+"/settings")
+					@DashNavItem("settings", "Team Settings", "/"+slug+"/settings")
 				</nav>
 				// Bottom actions
 				<div
@@ -141,7 +141,7 @@ templ DashboardLayout(title string, userName string, slug string) {
 					>
 						<i data-lucide="menu" width="16" height="16"></i>
 					</button>
-					// userName
+					// Team name
 					<div class="flex items-center px-5 h-full border-r border-zinc-200 dark:border-atom-border shrink-0">
 						<span class="text-sm font-bold text-zinc-900 dark:text-white whitespace-nowrap">{ userName }</span>
 					</div>
@@ -191,20 +191,66 @@ templ DashboardLayout(title string, userName string, slug string) {
 							</div>
 						</div>
 					</div>
-					// Right: theme toggle + avatar
-					<div class="ml-auto flex items-center divide-x divide-zinc-200 dark:divide-atom-border h-full">
-						<button
-							onclick="toggleTheme()"
-							class="h-full px-4 flex items-center text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg transition-colors"
-						>
-							<i data-lucide="sun" width="14" height="14" class="dark:hidden"></i>
-							<i data-lucide="moon" width="14" height="14" class="hidden dark:block"></i>
-						</button>
-						<div class="h-full px-4 flex items-center">
-							<div class="w-7 h-7 bg-zinc-900 dark:bg-white flex items-center justify-center shrink-0">
-								if len(userName) > 0 {
-									<span class="text-[10px] font-bold text-white dark:text-zinc-900 uppercase leading-none">{ string([]rune(userName)[0:1]) }</span>
-								}
+					// Right: user avatar dropdown
+					<div
+						class="ml-auto h-full flex items-center"
+						x-data="{ userOpen: false }"
+						@click.outside="userOpen = false"
+						@keydown.escape.window="userOpen = false"
+					>
+						<div class="relative h-full flex items-center">
+							<button
+								@click="userOpen = !userOpen"
+								class="h-full px-4 flex items-center hover:bg-zinc-100 dark:hover:bg-atom-surface transition-colors"
+							>
+								<div class="w-7 h-7 bg-zinc-900 dark:bg-white flex items-center justify-center shrink-0">
+									if len(userName) > 0 {
+										<span class="text-[10px] font-bold text-white dark:text-zinc-900 uppercase leading-none">{ string([]rune(userName)[0:1]) }</span>
+									}
+								</div>
+							</button>
+							<div
+								x-show="userOpen"
+								x-cloak
+								class="absolute right-0 top-full w-56 z-50 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg shadow-lg"
+							>
+								// User identity
+								<div class="px-4 py-3 border-b border-zinc-200 dark:border-atom-border">
+									<span class="block text-[11px] font-bold text-zinc-900 dark:text-white truncate">{ userName }</span>
+								</div>
+								// Account settings
+								<a
+									href="/account"
+									hx-get="/account"
+									hx-target="#dashboard-content"
+									hx-push-url="/account"
+									class="flex items-center gap-3 px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest"
+									@click="userOpen = false"
+								>
+									<i data-lucide="user" width="13" height="13" class="text-zinc-400 dark:text-atom-muted shrink-0"></i>
+									Account Settings
+								</a>
+								// Theme toggle
+								<button
+									onclick="toggleTheme()"
+									class="flex items-center gap-3 w-full px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest"
+									@click="userOpen = false"
+								>
+									<i data-lucide="sun" width="13" height="13" class="text-zinc-400 dark:text-atom-muted shrink-0 dark:hidden"></i>
+									<i data-lucide="moon" width="13" height="13" class="text-zinc-400 dark:text-atom-muted shrink-0 hidden dark:block"></i>
+									Toggle Theme
+								</button>
+								// Divider + Sign out
+								<div class="border-t border-zinc-200 dark:border-atom-border"></div>
+								<form method="POST" action="/auth/logout">
+									<button
+										type="submit"
+										class="flex items-center gap-3 w-full px-4 py-2.5 text-xs text-zinc-600 dark:text-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors uppercase tracking-widest"
+									>
+										<i data-lucide="log-out" width="13" height="13" class="text-zinc-400 dark:text-atom-muted shrink-0"></i>
+										Sign Out
+									</button>
+								</form>
 							</div>
 						</div>
 					</div>
@@ -258,7 +304,7 @@ templ DashboardLayout(title string, userName string, slug string) {
 							@DashPaletteItem("scroll-text", "Logs", "/"+slug+"/logs")
 							@DashPaletteItem("key", "Secrets", "/"+slug+"/secrets")
 							@DashPaletteItem("globe", "Domains", "/"+slug+"/domains")
-							@DashPaletteItem("settings", "Settings", "/"+slug+"/settings")
+							@DashPaletteItem("settings", "Team Settings", "/"+slug+"/settings")
 							<div class="my-1 mx-3 border-t border-zinc-100 dark:border-atom-border"></div>
 							@DashPaletteItem("life-buoy", "Support", "/"+slug+"/support")
 						</div>

@@ -96,6 +96,31 @@ func (h *handler) provisionUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type deleteAccountRequest struct {
+	UserID string `json:"user_id"`
+}
+
+// deleteAccount is called by the web BFF to permanently delete a user and all
+// their solely-owned teams. Protected by requireInternal.
+func (h *handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	var req deleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user_id", http.StatusBadRequest)
+		return
+	}
+	if err := h.Services.Auth.DeleteUserWithCleanup(r.Context(), userID); err != nil {
+		log.Printf("deleteAccount error: %v", err)
+		http.Error(w, "Failed to delete account", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // AuthLogin initiates the WorkOS OAuth flow.
 func (h *handler) authLogin(w http.ResponseWriter, r *http.Request) {
 	cliRedirectURI := r.URL.Query().Get("redirect_uri")

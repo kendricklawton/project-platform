@@ -36,6 +36,15 @@ const (
 	// Used on logout to revoke the WorkOS SSO session so the user is fully
 	// signed out of the identity provider (e.g. Google) and not auto-logged back in.
 	workosSessionCookieName = "platform_workos_sid"
+
+	// emailCookieName holds the user's email address for server-side rendering.
+	// Used by AccountDelete to validate the confirmation input.
+	// HttpOnly — read by Go only, not exposed to JavaScript.
+	emailCookieName = "platform_email"
+
+	// workosUserIDCookieName holds the WorkOS user ID (e.g. "user_01H...").
+	// Used by AccountDelete to remove the user from WorkOS on account deletion.
+	workosUserIDCookieName = "platform_workos_uid"
 )
 
 // sessionKey is the context key used to pass the user UUID through middleware.
@@ -64,6 +73,16 @@ func GetDisplayName(r *http.Request) string {
 // Returns an empty string if the user is not authenticated.
 func GetSlug(r *http.Request) string {
 	cookie, err := r.Cookie(slugCookieName)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	return cookie.Value
+}
+
+// GetEmail reads the stored email cookie for account confirmation flows.
+// Returns an empty string if the user is not authenticated.
+func GetEmail(r *http.Request) string {
+	cookie, err := r.Cookie(emailCookieName)
 	if err != nil || cookie.Value == "" {
 		return ""
 	}
@@ -188,6 +207,26 @@ func (h *Handler) AuthCallback(w http.ResponseWriter, r *http.Request) {
 		Expires:  exp,
 	})
 
+	// Email cookie — HttpOnly, used for account deletion confirmation.
+	http.SetCookie(w, &http.Cookie{
+		Name:     emailCookieName,
+		Value:    authResp.User.Email,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
+	// WorkOS user ID cookie — HttpOnly, used to delete the user from WorkOS on account deletion.
+	http.SetCookie(w, &http.Cookie{
+		Name:     workosUserIDCookieName,
+		Value:    authResp.User.ID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
 	// Slug cookie — HttpOnly, used to build slug-scoped URLs (e.g. /k-henry-team/services).
 	// TODO: derive from the database once team provisioning is wired up.
 	http.SetCookie(w, &http.Cookie{
@@ -229,7 +268,7 @@ func (h *Handler) AuthLogout(w http.ResponseWriter, r *http.Request) {
 
 	// Delete all session cookies. MaxAge=-1 → Max-Age=0; Expires=epoch is
 	// belt-and-suspenders for browsers that don't honour Max-Age.
-	for _, name := range []string{SessionCookieName, nameCookieName, slugCookieName, workosSessionCookieName, stateCookieName} {
+	for _, name := range []string{SessionCookieName, nameCookieName, emailCookieName, workosUserIDCookieName, slugCookieName, workosSessionCookieName, stateCookieName} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    "",
@@ -325,6 +364,29 @@ func (h *Handler) provisionUserViaAPI(ctx context.Context, email, firstName, las
 	}
 
 	return result.ID, result.Name, nil
+}
+
+// deleteAccountViaAPI calls DELETE /v1/auth/account on the Core API.
+func (h *Handler) deleteAccountViaAPI(ctx context.Context, userID string) error {
+	body, err := json.Marshal(map[string]string{"user_id": userID})
+	if err != nil {
+		return fmt.Errorf("marshal delete request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, h.APIURL+"/v1/auth/account", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create delete request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.InternalSecret)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("delete account returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // generateState returns a cryptographically random hex string for CSRF protection.

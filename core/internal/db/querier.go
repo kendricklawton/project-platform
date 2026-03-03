@@ -55,7 +55,9 @@ type Querier interface {
 	CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error)
 	DeleteDomain(ctx context.Context, arg DeleteDomainParams) (int64, error)
 	DeleteEnvVar(ctx context.Context, arg DeleteEnvVarParams) (int64, error)
+	DeleteOrphanedTeams(ctx context.Context, userID uuid.UUID) error
 	DeleteProject(ctx context.Context, arg DeleteProjectParams) (int64, error)
+	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteWebhook(ctx context.Context, arg DeleteWebhookParams) (int64, error)
 	GetBuildLogCount(ctx context.Context, deploymentID uuid.UUID) (int64, error)
 	GetBuildLogs(ctx context.Context, arg GetBuildLogsParams) ([]GetBuildLogsRow, error)
