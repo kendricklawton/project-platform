@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/go-chi/chi/v5"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/pages"
+	 pb "github.com/kendricklawton/project-platform/gen/go/platform/v1"
 	"github.com/kendricklawton/project-platform/gen/go/platform/v1/platformv1connect"
 	"github.com/workos/workos-go/v6/pkg/usermanagement"
 )
@@ -16,14 +18,15 @@ import (
 // Handler is the Backend-For-Frontend (BFF) controller.
 // It owns the WorkOS OAuth flow but delegates all DB operations to the Core API.
 type Handler struct {
-	APIURL            string
-	BaseURL           string
-	InternalSecret    string
-	WorkOSAPIKey      string
-	WorkOSClientID    string
-	WorkOSRedirectURI string
-	UserClient        platformv1connect.UserServiceClient
-	TeamClient        platformv1connect.TeamServiceClient
+	APIURL               string
+	BaseURL              string
+	InternalSecret       string
+	WorkOSAPIKey         string
+	WorkOSClientID       string
+	WorkOSRedirectURI    string
+	WorkOSCLIRedirectURI string
+	UserClient           platformv1connect.UserServiceClient
+	TeamClient           platformv1connect.TeamServiceClient
 }
 
 // NewHandler creates a new Web Handler with all required dependencies.
@@ -34,18 +37,20 @@ func NewHandler(
 	workOSAPIKey string,
 	workOSClientID string,
 	workOSRedirectURI string,
+	workOSCLIRedirectURI string,
 	userClient platformv1connect.UserServiceClient,
 	teamClient platformv1connect.TeamServiceClient,
 ) *Handler {
 	return &Handler{
-		APIURL:            apiURL,
-		BaseURL:           baseURL,
-		InternalSecret:    internalSecret,
-		WorkOSAPIKey:      workOSAPIKey,
-		WorkOSClientID:    workOSClientID,
-		WorkOSRedirectURI: workOSRedirectURI,
-		UserClient:        userClient,
-		TeamClient:        teamClient,
+		APIURL:               apiURL,
+		BaseURL:              baseURL,
+		InternalSecret:       internalSecret,
+		WorkOSAPIKey:         workOSAPIKey,
+		WorkOSClientID:       workOSClientID,
+		WorkOSRedirectURI:    workOSRedirectURI,
+		WorkOSCLIRedirectURI: workOSCLIRedirectURI,
+		UserClient:           userClient,
+		TeamClient:           teamClient,
 	}
 }
 
@@ -128,6 +133,26 @@ func (h *Handler) Templates(w http.ResponseWriter, r *http.Request) {
 	}
 
 	component := pages.TemplatesPage(userName)
+	if err := component.Render(r.Context(), w); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
+}
+
+// TemplateDetail renders a template detail page.
+func (h *Handler) TemplateDetail(w http.ResponseWriter, r *http.Request) {
+	userName := GetDisplayName(r)
+	slug := chi.URLParam(r, "slug")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	if h.isMainContentSwap(r) {
+		component := pages.TemplateDetailContent(userName, slug)
+		if err := component.Render(r.Context(), w); err != nil {
+			http.Error(w, "render error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	component := pages.TemplateDetailPage(userName, slug)
 	if err := component.Render(r.Context(), w); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
@@ -336,6 +361,20 @@ func (h *Handler) DashboardDomains(w http.ResponseWriter, r *http.Request) {
 	pages.DashboardDomainsPage(userName, slug).Render(r.Context(), w)
 }
 
+// DashboardWebhooks renders the webhooks page.
+func (h *Handler) DashboardWebhooks(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardWebhooksContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardWebhooksPage(userName, slug).Render(r.Context(), w)
+}
+
 // DashboardSettings renders the dashboard settings page.
 func (h *Handler) DashboardSettings(w http.ResponseWriter, r *http.Request) {
 	userName, slug := h.dashboardSlug(w, r)
@@ -348,6 +387,90 @@ func (h *Handler) DashboardSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pages.DashboardSettingsPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardBilling renders the billing page.
+func (h *Handler) DashboardBilling(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardBillingContent(slug).Render(r.Context(), w)
+		return
+	}
+	pages.DashboardBillingPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardBlueprints renders the blueprints page.
+func (h *Handler) DashboardBlueprints(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardBlueprintsContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardBlueprintsPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardEnvGroups renders the environment groups page.
+func (h *Handler) DashboardEnvGroups(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardEnvGroupsContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardEnvGroupsPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardObservability renders the observability page.
+func (h *Handler) DashboardObservability(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardObservabilityContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardObservabilityPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardNotifications renders the notifications page.
+func (h *Handler) DashboardNotifications(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardNotificationsContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardNotificationsPage(userName, slug).Render(r.Context(), w)
+}
+
+// DashboardPrivateLinks renders the private links page.
+func (h *Handler) DashboardPrivateLinks(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.DashboardPrivateLinksContent().Render(r.Context(), w)
+		return
+	}
+	pages.DashboardPrivateLinksPage(userName, slug).Render(r.Context(), w)
 }
 
 // Account renders the account settings page. Requires RequireAuth middleware.
@@ -425,4 +548,68 @@ func (h *Handler) Settings(w http.ResponseWriter, r *http.Request) {
 	if err := component.Render(r.Context(), w); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
+}
+
+// NewTeam renders the create-team page, or the upgrade gate for free users who already have a team.
+func (h *Handler) NewTeam(w http.ResponseWriter, r *http.Request) {
+	userName := h.dashboardAuth(w, r)
+	if userName == "" {
+		return
+	}
+	slug := GetSlug(r)
+	gated := GetTier(r) == "free" && slug != ""
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.NewTeamContent(slug, gated, "").Render(r.Context(), w)
+		return
+	}
+	pages.NewTeamPage(userName, slug, gated).Render(r.Context(), w)
+}
+
+// NewTeamPost handles the create-team form submission.
+func (h *Handler) NewTeamPost(w http.ResponseWriter, r *http.Request) {
+	userName := h.dashboardAuth(w, r)
+	if userName == "" {
+		return
+	}
+	slug := GetSlug(r)
+	if err := r.ParseForm(); err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		pages.NewTeamContent(slug, false, "Invalid form submission.").Render(r.Context(), w)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	newSlug := strings.TrimSpace(r.FormValue("slug"))
+	if name == "" || newSlug == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		pages.NewTeamContent(slug, false, "Team name and URL are required.").Render(r.Context(), w)
+		return
+	}
+	userID, ok := GetTokenFromContext(r.Context())
+	if !ok {
+		http.Redirect(w, r, "/auth/login", http.StatusFound)
+		return
+	}
+	req := connect.NewRequest(&pb.CreateTeamRequest{Name: name, Slug: newSlug})
+	req.Header().Set("Authorization", "Bearer "+userID)
+	resp, err := h.TeamClient.CreateTeam(r.Context(), req)
+	if err != nil {
+		log.Printf("NewTeamPost: CreateTeam error: %v", err)
+		errMsg := "Failed to create team. The URL may already be taken."
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		pages.NewTeamContent(slug, false, errMsg).Render(r.Context(), w)
+		return
+	}
+	createdSlug := resp.Msg.GetSlug()
+	// Update slug cookie to the new team
+	http.SetCookie(w, &http.Cookie{
+		Name:     slugCookieName,
+		Value:    createdSlug,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+	})
+	w.Header().Set("HX-Redirect", "/"+createdSlug)
+	w.WriteHeader(http.StatusOK)
 }

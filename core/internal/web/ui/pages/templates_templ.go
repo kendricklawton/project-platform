@@ -8,219 +8,9 @@ package pages
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import (
-	"strings"
+import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
-	"github.com/kendricklawton/project-platform/core/internal/web/ui/components"
-)
-
-// ── CODE EXAMPLES ─────────────────────────────────────────────────────────────
-
-var tmplCode1 = `package main
-
-import "net/http"
-
-func main() {
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "text/html")
-        w.Write([]byte("<h1>Hello, Platform</h1>"))
-    })
-    http.ListenAndServe(":8080", nil)
-}`
-
-var tmplCode2 = `// Return an HTML fragment — HTMX swaps it into #clock.
-// No JSON. No serialization. Just HTML.
-
-http.HandleFunc("/time", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "<span>%s</span>", time.Now().Format("15:04:05"))
-})
-
-// HTML template
-// <button hx-get='/time' hx-target='#clock' hx-swap='innerHTML'>
-//   Refresh
-// </button>
-// <div id='clock'>--:--:--</div>`
-
-var tmplCode3 = `<!-- Alpine.js via CDN script tag. No npm. No Node.js. -->
-
-<div x-data='{ count: 0 }' class='flex items-center gap-4'>
-  <button @click='count > 0 && count--'> - </button>
-  <span x-text='count' class='w-8 text-center tabular-nums'></span>
-  <button @click='count++'> + </button>
-</div>
-
-<div x-data='{ name: "" }'>
-  <input x-model='name' placeholder='Your name'>
-  <p x-show='name' x-text="'Hello, ' + name + '!'"></p>
-</div>`
-
-var tmplCode4 = `var catalog = []string{
-    "api-gateway", "auth-service",
-    "worker-pool", "edge-proxy",
-}
-
-http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-    q := strings.ToLower(r.URL.Query().Get("q"))
-    for _, svc := range catalog {
-        if strings.Contains(svc, q) {
-            fmt.Fprintf(w, "<li>%s</li>", html.EscapeString(svc))
-        }
-    }
-})
-
-// HTML
-// <input hx-get='/search' hx-target='#results'
-//        hx-trigger='keyup changed delay:300ms' name='q'
-//        placeholder='Filter services...'>
-// <ul id='results'></ul>`
-
-var tmplCode5 = `http.HandleFunc("/subscribe", func(w http.ResponseWriter, r *http.Request) {
-    r.ParseForm()
-    email := r.FormValue("email")
-    if !strings.Contains(email, "@") {
-        w.WriteHeader(422)
-        w.Write([]byte("<span class='err'>Valid email required.</span>"))
-        return
-    }
-    fmt.Fprintf(w, "<span class='ok'>Subscribed: %s</span>",
-        html.EscapeString(email))
-})
-
-// HTML: hx-post sends the form, hx-target shows the response
-// <form hx-post='/subscribe' hx-target='#msg'>
-//   <input name='email' type='email' placeholder='you@example.com'>
-//   <button type='submit'>Subscribe</button>
-// </form>
-// <div id='msg'></div>`
-
-var tmplCode6 = `<!-- Alpine modal — no React, no Vue, no framework -->
-
-<div x-data='{ open: false }'>
-  <button @click='open = true'>Open Modal</button>
-
-  <div
-    x-show='open'
-    class='fixed inset-0 bg-black/50 flex items-center justify-center z-50'
-    @keydown.escape.window='open = false'
-    @click.self='open = false'
-  >
-    <div class='bg-white border p-6 max-w-md w-full font-mono'>
-      <h2 class='text-sm font-bold mb-4'>Confirm Action</h2>
-      <p class='text-xs mb-4'>This cannot be undone.</p>
-      <div class='flex gap-3'>
-        <button @click='open = false'>Cancel</button>
-        <button @click='confirm(); open = false'>Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>`
-
-var tmplCode7 = `var (
-    mu    sync.Mutex
-    todos []string
-)
-
-// Add a todo item and re-render the list
-http.HandleFunc("/todos/add", func(w http.ResponseWriter, r *http.Request) {
-    r.ParseForm()
-    item := html.EscapeString(r.FormValue("item"))
-    mu.Lock()
-    todos = append(todos, item)
-    mu.Unlock()
-    renderList(w, todos)
-})
-
-// Delete by index and re-render
-http.HandleFunc("/todos/delete", func(w http.ResponseWriter, r *http.Request) {
-    r.ParseForm()
-    i, _ := strconv.Atoi(r.FormValue("i"))
-    mu.Lock()
-    todos = slices.Delete(todos, i, i+1)
-    mu.Unlock()
-    renderList(w, todos)
-})`
-
-var tmplCode8 = `// Server-Sent Events — Go pushes updates, HTMX listens.
-http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "text/event-stream")
-    w.Header().Set("Cache-Control", "no-cache")
-    w.Header().Set("Connection", "keep-alive")
-    flusher := w.(http.Flusher)
-
-    for {
-        select {
-        case <-r.Context().Done():
-            return // client disconnected
-        case msg := <-broadcast:
-            fmt.Fprintf(w, "data: <li>%s</li>\n\n", msg)
-            flusher.Flush()
-        }
-    }
-})
-
-// HTML — HTMX SSE extension appends fragments as they arrive
-// <ul hx-ext='sse' sse-connect='/events'
-//     sse-swap='message' hx-swap='beforeend'></ul>`
-
-var tmplCode9 = `const pageSize = 20
-
-http.HandleFunc("/items", func(w http.ResponseWriter, r *http.Request) {
-    page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-    items := store.FetchPage(page, pageSize)
-
-    for i, item := range items {
-        if i == len(items)-1 {
-            // Last item loads the next page when scrolled into view
-            next := fmt.Sprintf("/items?page=%d", page+1)
-            fmt.Fprintf(w,
-                "<div hx-get='%s' hx-trigger='revealed' hx-swap='afterend'>%s</div>",
-                next, item.Name)
-        } else {
-            fmt.Fprintf(w, "<div>%s</div>", item.Name)
-        }
-    }
-})`
-
-var tmplCode10 = `<!-- Alpine tab state + HTMX lazy-loads content on first switch -->
-
-<div x-data='{ tab: "overview" }'>
-  <nav class='flex border-b font-mono text-xs'>
-    <button
-      @click='tab = "overview"'
-      :class='{ "border-b-2 border-black font-bold": tab === "overview" }'
-      class='px-4 py-2 uppercase tracking-widest'
-    >Overview</button>
-    <button
-      @click='tab = "logs"'
-      hx-get='/tab/logs'
-      hx-target='#tab-panel'
-      :class='{ "border-b-2 border-black font-bold": tab === "logs" }'
-      class='px-4 py-2 uppercase tracking-widest'
-    >Logs</button>
-    <button
-      @click='tab = "metrics"'
-      hx-get='/tab/metrics'
-      hx-target='#tab-panel'
-      :class='{ "border-b-2 border-black font-bold": tab === "metrics" }'
-      class='px-4 py-2 uppercase tracking-widest'
-    >Metrics</button>
-  </nav>
-  <div id='tab-panel' class='p-4 text-xs'>
-    Select a tab to load content.
-  </div>
-</div>`
-
-// ── HELPERS ───────────────────────────────────────────────────────────────────
-
-func escapeCode(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
-}
-
-// ── COMPONENTS ────────────────────────────────────────────────────────────────
-func codeDisplay(code string) templ.Component {
+func TemplatesPage(userName string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -241,157 +31,7 @@ func codeDisplay(code string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<pre class=\"p-5 text-[11px] font-mono leading-relaxed text-zinc-800 dark:text-atom-fg overflow-x-auto whitespace-pre m-0\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templ.Raw(escapeCode(code)).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</pre>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func tmplCard(num string, title string, desc string, tags string) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var2 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var2 == nil {
-			templ_7745c5c3_Var2 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg\" x-data=\"{ open: false }\"><div class=\"flex items-start justify-between gap-4 px-5 py-4 cursor-pointer hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors select-none\" @click=\"open = !open\"><div class=\"flex flex-col gap-2 min-w-0\"><div class=\"flex items-center gap-3\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(num)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 231, Col: 116}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span> <span class=\"text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-widest truncate\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(title)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 232, Col: 109}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span></div><p class=\"text-[11px] font-mono text-zinc-500 dark:text-atom-muted leading-relaxed\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 234, Col: 94}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</p><div class=\"flex flex-wrap gap-1.5\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		for _, tag := range strings.Split(tags, ",") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<span class=\"text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 border border-zinc-200 dark:border-atom-border text-zinc-500 dark:text-atom-muted\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(strings.TrimSpace(tag))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 237, Col: 185}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><div class=\"flex items-center gap-3 shrink-0\"><button disabled class=\"px-4 py-1.5 border border-zinc-200 dark:border-atom-border text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-atom-muted cursor-not-allowed opacity-50\" @click.stop>Deploy</button> <span class=\"text-zinc-400 dark:text-atom-muted\" x-show=\"!open\"><i data-lucide=\"chevron-down\" width=\"14\" height=\"14\"></i></span> <span class=\"text-zinc-400 dark:text-atom-muted\" x-show=\"open\" style=\"display:none\"><i data-lucide=\"chevron-up\" width=\"14\" height=\"14\"></i></span></div></div><div x-show=\"open\" style=\"display:none\" class=\"border-t border-zinc-200 dark:border-atom-border\"><div class=\"flex items-center gap-1.5 px-4 py-2 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface\"><div class=\"w-2 h-2 bg-red-400 dark:bg-atom-red opacity-70\"></div><div class=\"w-2 h-2 bg-yellow-400 dark:bg-atom-yellow opacity-70\"></div><div class=\"w-2 h-2 bg-green-400 dark:bg-atom-green opacity-70\"></div><span class=\"ml-3 text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(title)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 262, Col: 113}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</span></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templ_7745c5c3_Var2.Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-// ── PAGE ──────────────────────────────────────────────────────────────────────
-func TemplatesPage(userName string) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var8 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var8 == nil {
-			templ_7745c5c3_Var8 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -409,7 +49,7 @@ func TemplatesPage(userName string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.Layout("Templates | Platform", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.Layout("Templates | Platform", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -433,277 +73,104 @@ func TemplatesContent(userName string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
+		templ_7745c5c3_Var3 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var3 == nil {
+			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"flex flex-col gap-24 py-12\"><section class=\"relative z-10 flex flex-col gap-6 max-w-3xl\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex flex-col gap-24 py-12\"><section class=\"relative z-10 flex flex-col gap-6 max-w-3xl\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs("// templates")
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs("// templates")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 281, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 15, Col: 116}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</span><h1 class=\"text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tight uppercase\">Go + HTMX + Alpine</h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4\">Ten copy-paste patterns for building server-rendered UIs. No Node.js. No npm. No build pipeline. Click any template to view the source, then deploy directly to Platform.</p></section><section class=\"relative z-10\"><div class=\"grid grid-cols-1 md:grid-cols-2 gap-3\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode1).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("01", "Hello World", "Minimal Go HTTP server. Single file, zero dependencies.", "Go").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span><h1 class=\"text-4xl sm:text-5xl lg:text-6xl font-black text-zinc-900 dark:text-white tracking-tight uppercase\">Deploy in Seconds.</h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4\">Production-ready Go starters. Clone, configure, push. No Dockerfile. No Node layer. Just a binary.</p></section><section class=\"relative z-10\"><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-zinc-200 dark:bg-atom-border border border-zinc-200 dark:border-atom-border\"><a href=\"/templates/go-portfolio\" hx-get=\"/templates/go-portfolio\" hx-target=\"#main-content\" hx-push-url=\"/templates/go-portfolio\" class=\"group bg-white dark:bg-atom-bg flex flex-col hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors\"><div class=\"border-b border-zinc-200 dark:border-atom-border bg-zinc-900 dark:bg-atom-surface p-6 h-48 flex flex-col justify-between overflow-hidden relative\"><div class=\"absolute inset-0 opacity-[0.04]\" style=\"background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px); background-size: 20px 20px;\"></div><div class=\"relative z-10 flex flex-col gap-3\"><div class=\"flex items-center gap-1.5\"><div class=\"w-2 h-2 bg-red-400 opacity-70\"></div><div class=\"w-2 h-2 bg-yellow-400 opacity-70\"></div><div class=\"w-2 h-2 bg-green-400 opacity-70\"></div><span class=\"ml-2 text-[10px] font-mono text-zinc-500 uppercase tracking-widest\">portfolio.go</span></div><div class=\"font-mono text-[11px] leading-relaxed text-zinc-400 space-y-1\"><div><span class=\"text-atom-blue\">func</span> <span class=\"text-atom-green\">main</span><span class=\"text-zinc-500\">()</span> <span class=\"text-zinc-500\">&#123;</span></div><div class=\"pl-4\"><span class=\"text-atom-blue\">http</span><span class=\"text-zinc-500\">.</span><span class=\"text-atom-green\">ListenAndServe</span><span class=\"text-zinc-500\">(</span></div><div class=\"pl-8\"><span class=\"text-atom-yellow\">&#34;:8080&#34;</span><span class=\"text-zinc-500\">, router)</span></div><div><span class=\"text-zinc-500\">&#125;</span></div></div></div><div class=\"relative z-10 flex items-center gap-2\"><span class=\"text-[9px] font-mono font-bold px-2 py-0.5 border border-atom-green/40 text-atom-green uppercase tracking-widest\">Go</span> <span class=\"text-[9px] font-mono font-bold px-2 py-0.5 border border-atom-blue/40 text-atom-blue uppercase tracking-widest\">Templ</span> <span class=\"text-[9px] font-mono font-bold px-2 py-0.5 border border-atom-yellow/40 text-atom-yellow uppercase tracking-widest\">HTMX</span></div></div><div class=\"p-5 flex flex-col gap-3 flex-1\"><div class=\"flex items-start justify-between gap-4\"><div class=\"flex flex-col gap-1\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">01_</span><h2 class=\"text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest\">Go Portfolio</h2></div><span class=\"shrink-0 text-zinc-400 dark:text-atom-muted group-hover:text-zinc-900 dark:group-hover:text-white transition-colors\"><i data-lucide=\"arrow-right\" width=\"16\" height=\"16\"></i></span></div><p class=\"text-xs text-zinc-500 dark:text-atom-muted leading-relaxed\">Terminal-style personal portfolio for Go developers. Bio, projects, and contact form. Ships as a single static binary.</p></div></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode2).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("02", "HTMX Fragment Swap", "Go handler returns an HTML fragment. HTMX swaps it into the DOM. No JSON.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var13), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templateComingSoon("02_", "Go REST API").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode3).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("03", "Alpine Reactive UI", "Client-side reactive state via Alpine x-data. No virtual DOM. Zero build toolchain.", "Alpine").Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templateComingSoon("03_", "Go + HTMX Dashboard").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode4).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("04", "Live Search", "HTMX fires a GET on each keyup with debounce. Go filters and returns matching HTML rows.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templateComingSoon("04_", "Go CLI Tool Site").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var16 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode5).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("05", "Form Validation", "HTMX form POST on blur. Go validates server-side and returns an inline error or success.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var16), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templateComingSoon("05_", "Go Blog").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var17 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode6).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("06", "Alpine Modal", "Overlay dialog driven entirely by Alpine state. No JS file. Keyboard accessible.", "Alpine").Render(templ.WithChildren(ctx, templ_7745c5c3_Var17), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templateComingSoon("06_", "Rust API").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode7).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("07", "Todo List", "Add and delete items. Go holds state, HTMX re-renders the list on each mutation.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></section></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var19 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode8).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("08", "SSE Live Feed", "Go streams Server-Sent Events. HTMX SSE extension injects each event into the DOM.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var19), templ_7745c5c3_Buffer)
+		return nil
+	})
+}
+
+func templateComingSoon(num string, name string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"bg-white dark:bg-atom-bg flex flex-col opacity-40 cursor-not-allowed\"><div class=\"border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface h-48 flex items-center justify-center\"><i data-lucide=\"lock\" width=\"20\" height=\"20\" class=\"text-zinc-300 dark:text-atom-border\"></i></div><div class=\"p-5 flex flex-col gap-1\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var20 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode9).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("09", "Infinite Scroll", "Cursor-based pagination. Last item triggers next page load when scrolled into view.", "Go, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var20), templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(num)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 89, Col: 105}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-			if !templ_7745c5c3_IsBuffer {
-				defer func() {
-					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err == nil {
-						templ_7745c5c3_Err = templ_7745c5c3_BufErr
-					}
-				}()
-			}
-			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = codeDisplay(tmplCode10).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			return nil
-		})
-		templ_7745c5c3_Err = tmplCard("10", "Tabbed Content", "Alpine drives active tab state. HTMX lazy-loads each panel on first switch.", "Alpine, HTMX").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</span><h2 class=\"text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></section><section class=\"relative z-10 border border-zinc-200 dark:border-atom-border bg-zinc-900 dark:bg-atom-surface p-10 text-center overflow-hidden\"><div class=\"absolute inset-0 opacity-[0.04] pointer-events-none\" style=\"background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px); background-size: 24px 24px;\"></div><div class=\"relative z-10 flex flex-col items-center gap-6\"><p class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted uppercase tracking-widest\">")
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 90, Col: 95}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var22 string
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs("// deploy it")
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/templates.templ`, Line: 330, Col: 114}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p><h2 class=\"text-2xl md:text-3xl font-black text-white tracking-tight\">Push your binary. We run it.</h2><p class=\"text-sm text-zinc-400 dark:text-atom-muted font-mono max-w-md\">No Dockerfile. No Node layer. Just <code class=\"text-atom-green\">go build</code> and push.</p><div class=\"flex flex-col sm:flex-row gap-3 justify-center\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if userName != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<a href=\"/dashboard\" class=\"inline-flex items-center justify-center gap-2 px-8 py-3 bg-white text-black font-bold text-xs tracking-widest uppercase hover:opacity-90 transition-opacity\"><i data-lucide=\"layout-dashboard\" width=\"14\" height=\"14\"></i> Enter Workspace</a> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<a href=\"/auth/login\" class=\"inline-flex items-center justify-center gap-2 px-8 py-3 bg-white text-black font-bold text-xs tracking-widest uppercase hover:opacity-90 transition-opacity\"><i data-lucide=\"log-in\" width=\"14\" height=\"14\"></i> Get Started</a> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<a href=\"/docs/getting-started/quickstart\" hx-get=\"/docs/getting-started/quickstart\" hx-target=\"#main-content\" hx-push-url=\"/docs/getting-started/quickstart\" class=\"inline-flex items-center justify-center gap-2 px-8 py-3 border border-zinc-700 dark:border-atom-border text-zinc-300 dark:text-atom-muted font-bold text-xs tracking-widest uppercase hover:border-white hover:text-white transition-colors\"><i data-lucide=\"book-open\" width=\"14\" height=\"14\"></i> Read the Docs</a></div></div></section></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</h2><p class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest mt-1\">Coming Soon</p></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -36,6 +36,7 @@ func main() {
 		cfg.WorkOSAPIKey,
 		cfg.WorkOSClientID,
 		cfg.WorkOSRedirectURI,
+		cfg.WorkOSCLIRedirectURI,
 		userClient,
 		teamClient,
 	)

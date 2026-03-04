@@ -45,6 +45,10 @@ const (
 	// workosUserIDCookieName holds the WorkOS user ID (e.g. "user_01H...").
 	// Used by AccountDelete to remove the user from WorkOS on account deletion.
 	workosUserIDCookieName = "platform_workos_uid"
+
+	// tierCookieName holds the user's billing tier ("free", "pro", "enterprise").
+	// HttpOnly — read server-side to gate features like new team creation.
+	tierCookieName = "platform_tier"
 )
 
 // sessionKey is the context key used to pass the user UUID through middleware.
@@ -75,6 +79,15 @@ func GetSlug(r *http.Request) string {
 	cookie, err := r.Cookie(slugCookieName)
 	if err != nil || cookie.Value == "" {
 		return ""
+	}
+	return cookie.Value
+}
+
+// GetTier reads the billing tier cookie. Defaults to "free" if not set.
+func GetTier(r *http.Request) string {
+	cookie, err := r.Cookie(tierCookieName)
+	if err != nil || cookie.Value == "" {
+		return "free"
 	}
 	return cookie.Value
 }
@@ -177,7 +190,7 @@ func (h *Handler) AuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Provision the user via the Core API (the only layer with DB access)
-	userID, userName, err := h.provisionUserViaAPI(r.Context(), authResp.User.Email, authResp.User.FirstName, authResp.User.LastName)
+	userID, userName, teamSlug, tier, err := h.provisionUserViaAPI(r.Context(), authResp.User.Email, authResp.User.FirstName, authResp.User.LastName)
 	if err != nil {
 		log.Printf("provisionUserViaAPI error: %v", err)
 		http.Error(w, "Failed to provision user account", http.StatusInternalServerError)
@@ -227,11 +240,20 @@ func (h *Handler) AuthCallback(w http.ResponseWriter, r *http.Request) {
 		Expires:  exp,
 	})
 
-	// Slug cookie — HttpOnly, used to build slug-scoped URLs (e.g. /k-henry-team/services).
-	// TODO: derive from the database once team provisioning is wired up.
+	// Slug cookie — HttpOnly, used to build slug-scoped URLs (e.g. /my-team/services).
 	http.SetCookie(w, &http.Cookie{
 		Name:     slugCookieName,
-		Value:    "k-henry-team",
+		Value:    teamSlug,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  exp,
+	})
+
+	// Tier cookie — HttpOnly, used server-side to gate plan-restricted features.
+	http.SetCookie(w, &http.Cookie{
+		Name:     tierCookieName,
+		Value:    tier,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -254,7 +276,7 @@ func (h *Handler) AuthCallback(w http.ResponseWriter, r *http.Request) {
 		log.Printf("AuthCallback: could not extract WorkOS session ID: %v", err)
 	}
 
-	http.Redirect(w, r, "/k-henry-team", http.StatusFound)
+	http.Redirect(w, r, "/"+teamSlug, http.StatusFound)
 }
 
 // AuthLogout clears all session cookies and redirects to the WorkOS logout URL,
@@ -326,44 +348,58 @@ func extractSIDFromJWT(token string) (string, error) {
 }
 
 // provisionUserViaAPI calls POST /v1/auth/provision on the Core API.
-// Returns the user's ID and display name.
-func (h *Handler) provisionUserViaAPI(ctx context.Context, email, firstName, lastName string) (string, string, error) {
-	body, err := json.Marshal(map[string]string{
+// Returns the user's ID, display name, primary team slug, and billing tier.
+func (h *Handler) provisionUserViaAPI(ctx context.Context, email, firstName, lastName string) (userID, userName, slug, tier string, err error) {
+	body, marshalErr := json.Marshal(map[string]string{
 		"email":      email,
 		"first_name": firstName,
 		"last_name":  lastName,
 	})
-	if err != nil {
-		return "", "", fmt.Errorf("marshal provision request: %w", err)
+	if marshalErr != nil {
+		err = fmt.Errorf("marshal provision request: %w", marshalErr)
+		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.APIURL+"/v1/auth/provision", bytes.NewReader(body))
-	if err != nil {
-		return "", "", fmt.Errorf("create provision request: %w", err)
+	req, reqErr := http.NewRequestWithContext(ctx, http.MethodPost, h.APIURL+"/v1/auth/provision", bytes.NewReader(body))
+	if reqErr != nil {
+		err = fmt.Errorf("create provision request: %w", reqErr)
+		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Secret", h.InternalSecret)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("provision request failed: %w", err)
+	resp, doErr := http.DefaultClient.Do(req)
+	if doErr != nil {
+		err = fmt.Errorf("provision request failed: %w", doErr)
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("provision returned %d", resp.StatusCode)
+		err = fmt.Errorf("provision returned %d", resp.StatusCode)
+		return
 	}
 
 	var result struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Email string `json:"email"`
+		Slug  string `json:"slug"`
+		Tier  string `json:"tier"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", "", fmt.Errorf("decode provision response: %w", err)
+	if decErr := json.NewDecoder(resp.Body).Decode(&result); decErr != nil {
+		err = fmt.Errorf("decode provision response: %w", decErr)
+		return
 	}
 
-	return result.ID, result.Name, nil
+	userID = result.ID
+	userName = result.Name
+	slug = result.Slug
+	tier = result.Tier
+	if tier == "" {
+		tier = "free"
+	}
+	return
 }
 
 // deleteAccountViaAPI calls DELETE /v1/auth/account on the Core API.
@@ -387,6 +423,108 @@ func (h *Handler) deleteAccountViaAPI(ctx context.Context, userID string) error 
 		return fmt.Errorf("delete account returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// cliRedirectCookieName holds the CLI's local callback URI through the WorkOS round-trip.
+// Short-lived (5 min), HttpOnly, cleared immediately after use.
+const cliRedirectCookieName = "auth_cli_redirect"
+
+// AuthCLILogin starts the browser-based OAuth flow for the CLI.
+// The CLI passes its local callback URI as redirect_uri (must be http://localhost).
+// We store it in a short-lived cookie, then redirect to WorkOS using the BFF's
+// /auth/cli/callback as the registered redirect URI.
+func (h *Handler) AuthCLILogin(w http.ResponseWriter, r *http.Request) {
+	cliRedirectURI := r.URL.Query().Get("redirect_uri")
+	if cliRedirectURI == "" || !strings.HasPrefix(cliRedirectURI, "http://localhost") {
+		http.Error(w, "invalid redirect_uri: must be http://localhost", http.StatusBadRequest)
+		return
+	}
+
+	state, err := generateState()
+	if err != nil {
+		http.Error(w, "failed to initialize login", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     stateCookieName,
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   300,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     cliRedirectCookieName,
+		Value:    cliRedirectURI,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   300,
+	})
+
+	usermanagement.SetAPIKey(h.WorkOSAPIKey)
+	authURL, err := usermanagement.GetAuthorizationURL(usermanagement.GetAuthorizationURLOpts{
+		ClientID:    h.WorkOSClientID,
+		RedirectURI: h.WorkOSCLIRedirectURI,
+		Provider:    "authkit",
+		State:       state,
+	})
+	if err != nil {
+		http.Error(w, "failed to generate auth URL", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, authURL.String(), http.StatusFound)
+}
+
+// AuthCLICallback handles the WorkOS redirect for the CLI auth flow.
+// Exchanges the code for a user profile, provisions the user, then redirects
+// to the CLI's local callback server with the user token.
+func (h *Handler) AuthCLICallback(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	returnedState := r.URL.Query().Get("state")
+
+	stateCookie, err := r.Cookie(stateCookieName)
+	if err != nil || returnedState == "" || stateCookie.Value != returnedState {
+		http.Error(w, "invalid or expired authentication state", http.StatusUnauthorized)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: stateCookieName, Value: "", Path: "/", MaxAge: -1})
+
+	cliRedirectCookie, err := r.Cookie(cliRedirectCookieName)
+	if err != nil || cliRedirectCookie.Value == "" {
+		http.Error(w, "missing CLI redirect URI", http.StatusBadRequest)
+		return
+	}
+	cliRedirectURI := cliRedirectCookie.Value
+	http.SetCookie(w, &http.Cookie{Name: cliRedirectCookieName, Value: "", Path: "/", MaxAge: -1})
+
+	// Defense in depth: re-validate the stored redirect URI
+	if !strings.HasPrefix(cliRedirectURI, "http://localhost") {
+		http.Error(w, "invalid redirect URI", http.StatusBadRequest)
+		return
+	}
+
+	usermanagement.SetAPIKey(h.WorkOSAPIKey)
+	authResp, err := usermanagement.AuthenticateWithCode(r.Context(), usermanagement.AuthenticateWithCodeOpts{
+		ClientID: h.WorkOSClientID,
+		Code:     code,
+	})
+	if err != nil {
+		log.Printf("AuthCLICallback: WorkOS error: %v", err)
+		http.Error(w, "authentication failed", http.StatusInternalServerError)
+		return
+	}
+
+	userID, _, _, _, err := h.provisionUserViaAPI(r.Context(), authResp.User.Email, authResp.User.FirstName, authResp.User.LastName)
+	if err != nil {
+		log.Printf("AuthCLICallback: provision error: %v", err)
+		http.Error(w, "failed to provision user", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, cliRedirectURI+"?token="+userID, http.StatusFound)
 }
 
 // generateState returns a cryptographically random hex string for CSRF protection.

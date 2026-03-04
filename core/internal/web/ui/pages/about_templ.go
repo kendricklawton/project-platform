@@ -91,7 +91,7 @@ func AboutContent(userName string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span><h1 class=\"text-5xl sm:text-6xl font-black tracking-tighter leading-[0.9]\"><span class=\"text-zinc-900 dark:text-white\">A HOME FOR</span><br><span class=\"text-zinc-400 dark:text-atom-muted\">COMPILED</span><br><span class=\"text-zinc-200 dark:text-atom-border\">LANGUAGES.</span></h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4 max-w-lg\">Platform built for Go and Rust. Not because JavaScript is wrong — we ship this site with Alpine.js and HTMX — but because static binary workloads deserve infrastructure designed around them from the start.</p></section><section class=\"relative z-10 max-w-4xl\"><div class=\"mb-10\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span><h1 class=\"text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-[0.9]\"><span class=\"text-zinc-900 dark:text-white\">A HOME FOR</span><br><span class=\"text-zinc-400 dark:text-atom-muted\">COMPILED</span><br><span class=\"text-zinc-200 dark:text-atom-border\">LANGUAGES.</span></h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4 max-w-lg\">Platform built for Go and Rust. Not because JavaScript is wrong — we ship this site with Alpine.js and HTMX — but because static binary workloads deserve infrastructure designed around them from the start.</p></section><section class=\"relative z-10 max-w-4xl\"><div class=\"mb-10\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -150,14 +150,14 @@ func AboutContent(userName string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span><h2 class=\"text-xl font-black text-zinc-900 dark:text-white uppercase tracking-widest mt-1\">Kendrick Lawton.</h2></div><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"bg-white dark:bg-atom-bg p-8 flex flex-col gap-6\"><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose\">I was a gamer before I was a developer. That's where I learned that systems have rules — and if you understand the rules deeply enough, you can work with them in ways the designers never intended. That mindset carried over directly into code.</p><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose\">I got into software the way a lot of people do — through the web. It was accessible, there were tutorials, things worked fast. But the pull was always lower. I wanted to know what was underneath. How the container actually runs. Why the network behaves the way it does. What the kernel is doing while the application sleeps.</p><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose\">I have been a gamer. I have been a developer. The goal now is to be a platform builder — someone who doesn't just use the infrastructure but designs and operates it. Project Platform is the direct expression of that goal. Not a side project. Not a portfolio piece. The thing itself.</p></div></div></section><section class=\"relative z-10 max-w-4xl w-full\"><div class=\"mb-10\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</span><h2 class=\"text-xl font-black text-zinc-900 dark:text-white uppercase tracking-widest mt-1\">Kendrick Lawton.</h2></div><div class=\"grid md:grid-cols-3 gap-px bg-zinc-200 dark:bg-atom-border border border-zinc-200 dark:border-atom-border mb-px\"><div class=\"bg-white dark:bg-atom-bg p-8 flex flex-col gap-3\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">01_ input</span><h3 class=\"text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest\">Read Everything.</h3><p class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose\">Technical books cover to cover. Not tutorials — the actual texts. SICP. Operating systems. Distributed systems. The fundamentals that most engineers skip because there's a library for it.</p></div><div class=\"bg-white dark:bg-atom-bg p-8 flex flex-col gap-3\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">02_ discipline</span><h3 class=\"text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest\">Grind The Patterns.</h3><p class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose\">LeetCode until the algorithms are reflexive. Not for interviews — for the habit of breaking a problem down until it has a shape, then writing toward that shape with precision.</p></div><div class=\"bg-white dark:bg-atom-bg p-8 flex flex-col gap-3\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">03_ leverage</span><h3 class=\"text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest\">Use Every Tool.</h3><p class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose\">AI agents compress months into weeks. That's not cheating — that's engineering. The leverage belongs to whoever picks it up. This platform exists because I picked it up.</p></div></div><div class=\"border border-zinc-200 dark:border-atom-border border-t-0\"><div class=\"bg-white dark:bg-atom-bg px-8 py-6\"><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4\">Read. Grind. Build with agents. That's me — and this platform is what it looks like when I apply that combination seriously to infrastructure.</p></div></div></section><section class=\"relative z-10 max-w-4xl w-full\"><div class=\"mb-10\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs("// languages")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 72, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 83, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 		if templ_7745c5c3_Err != nil {
@@ -170,7 +170,7 @@ func AboutContent(userName string) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs("// get started")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 103, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 114, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -227,7 +227,7 @@ func aboutManifestoCard(num string, title string, body string) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(num)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 134, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 145, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -240,7 +240,7 @@ func aboutManifestoCard(num string, title string, body string) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 135, Col: 112}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 146, Col: 112}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -253,7 +253,7 @@ func aboutManifestoCard(num string, title string, body string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(body)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 136, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 147, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -295,7 +295,7 @@ func aboutStackRow(name string, category string, description string) templ.Compo
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 143, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 154, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -308,7 +308,7 @@ func aboutStackRow(name string, category string, description string) templ.Compo
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(category)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 144, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 155, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -321,7 +321,7 @@ func aboutStackRow(name string, category string, description string) templ.Compo
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 146, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/about.templ`, Line: 157, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {

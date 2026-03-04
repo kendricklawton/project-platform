@@ -21,7 +21,15 @@ var revisionsCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		path := fmt.Sprintf("/v1/revisions?limit=%d", viper.GetInt("revisions.limit"))
+		platToml := viper.New()
+		platToml.SetConfigFile("plat.toml")
+		if err := platToml.ReadInConfig(); err != nil {
+			tui.ShowError("No plat.toml found in current directory. Run: plat init")
+			os.Exit(1)
+		}
+		serviceName := platToml.GetString("app.name")
+
+		path := fmt.Sprintf("/v1/revisions?service=%s&limit=%d", serviceName, viper.GetInt("revisions.limit"))
 
 		var rows []tui.RevisionRow
 		_ = tui.RunLoader("Fetching revisions...", func() {

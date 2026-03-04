@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/kendricklawton/project-platform/core/internal/db"
 )
 
@@ -55,6 +56,16 @@ func (s *AuthService) ProvisionUser(ctx context.Context, p UserProfile) (*db.Use
 		Slug:   fmt.Sprintf("%s-team", generateSlug(fullName)),
 	})
 	if err != nil {
+		// Two concurrent logins for the same email can both pass the GetUserByEmail
+		// check before either inserts. If we lost the race, fetch the winner's record.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			existing, fetchErr := s.Store.GetUserByEmail(ctx, p.Email)
+			if fetchErr != nil {
+				return nil, fmt.Errorf("re-fetching user after concurrent insert: %w", fetchErr)
+			}
+			return &existing, nil
+		}
 		return nil, fmt.Errorf("onboarding user: %w", err)
 	}
 

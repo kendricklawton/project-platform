@@ -32,6 +32,7 @@ func init() {
 	cobra.CheckErr(viper.BindPFlag("token", rootCmd.PersistentFlags().Lookup("token")))
 
 	viper.SetDefault("api_url", "https://api.projectplatform.dev")
+	viper.SetDefault("web_url", "https://projectplatform.dev")
 }
 
 // initConfig reads in config file and ENV variables if set.

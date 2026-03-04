@@ -91,7 +91,7 @@ func ChangelogContent(userName string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span><h1 class=\"text-5xl sm:text-6xl font-black tracking-tighter leading-[0.9]\"><span class=\"text-zinc-900 dark:text-white\">WHAT'S</span><br><span class=\"text-zinc-200 dark:text-atom-border\">SHIPPED.</span></h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4 max-w-lg\">Every release, in order. No marketing. Just what changed.</p></section><section class=\"relative z-10 max-w-3xl w-full flex flex-col gap-px bg-zinc-200 dark:bg-atom-border border border-zinc-200 dark:border-atom-border\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</span><h1 class=\"text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-[0.9]\"><span class=\"text-zinc-900 dark:text-white\">WHAT'S</span><br><span class=\"text-zinc-200 dark:text-atom-border\">SHIPPED.</span></h1><p class=\"text-sm text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4 max-w-lg\">Every release, in order. No marketing. Just what changed.</p></section><section class=\"relative z-10 max-w-3xl w-full flex flex-col gap-px bg-zinc-200 dark:bg-atom-border border border-zinc-200 dark:border-atom-border\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/kendricklawton/project-platform/core/internal/cli/api"
 	"github.com/kendricklawton/project-platform/core/internal/cli/tui"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var secretCmd = &cobra.Command{
@@ -53,9 +54,18 @@ var secretListCmd = &cobra.Command{
 			tui.ShowError("Not authenticated. Run: plat auth login")
 			os.Exit(1)
 		}
+
+		platToml := viper.New()
+		platToml.SetConfigFile("plat.toml")
+		if err := platToml.ReadInConfig(); err != nil {
+			tui.ShowError("No plat.toml found in current directory. Run: plat init")
+			os.Exit(1)
+		}
+		serviceName := platToml.GetString("app.name")
+
 		var keys []string
 		_ = tui.RunLoader("Fetching secrets...", func() {
-			resp, err := client.Get("/v1/secrets")
+			resp, err := client.Get(fmt.Sprintf("/v1/secrets?service=%s", serviceName))
 			if err != nil {
 				return
 			}

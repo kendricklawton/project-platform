@@ -63,7 +63,7 @@ func DashboardPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Overview | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Projects | Platform", userName, slug, "layout-grid", "Projects").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -92,70 +92,444 @@ func DashboardContent(userName string, slug string) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"p-6 lg:p-8\"><div class=\"grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8\"><div class=\"flex flex-col gap-6 lg:gap-8\"><div class=\"flex flex-col gap-3\"><h2 class=\"text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-widest\">Usage</h2><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"flex items-center justify-between px-5 py-3 border-b border-zinc-200 dark:border-atom-border\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg\">Last 30 days</span> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div data-page-title=\"Projects\" data-page-icon=\"layout-grid\" class=\"p-6 lg:p-8 flex flex-col gap-8\"><div class=\"flex justify-end\"><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 templ.SafeURL
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/pricing"))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + slug + "/new"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 38, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 31, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"px-3 py-1 bg-zinc-900 dark:bg-white text-[10px] font-bold text-white dark:text-zinc-900 uppercase tracking-widest hover:opacity-80 transition-opacity\">Upgrade</a></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-[10px] font-bold text-white dark:text-zinc-900 uppercase tracking-widest hover:opacity-80 transition-opacity\"><i data-lucide=\"plus\" width=\"12\" height=\"12\"></i> New Project</a></div><div class=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4\"><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = dashUsageRow("Egress", "0 B", "10 GB").Render(ctx, templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var5 templ.SafeURL
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + slug + "/projects/default"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 42, Col: 54}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = dashUsageRow("Build Minutes", "0", "200 min").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" class=\"border border-zinc-200 dark:border-atom-border p-5 flex flex-col gap-4 hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors\"><div class=\"flex items-center gap-2\"><i data-lucide=\"folder\" width=\"14\" height=\"14\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <span class=\"text-sm font-bold text-zinc-900 dark:text-white truncate\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = dashUsageRow("Services", "0", "3").Render(ctx, templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(slug)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 47, Col: 82}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = dashUsageRow("Domains", "0", "1").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span></div><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted px-2 py-0.5 border border-zinc-200 dark:border-atom-border self-start\">No active services</span></a><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div><div class=\"flex flex-col gap-3\"><h2 class=\"text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-widest\">Recent Deployments</h2><div class=\"border border-zinc-200 dark:border-atom-border overflow-hidden\"><div class=\"max-h-96 overflow-y-auto scroll-container\">")
+		var templ_7745c5c3_Var7 templ.SafeURL
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + slug + "/new"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 53, Col: 41}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for i := 0; i < 50; i++ {
-			templ_7745c5c3_Err = dashDeploymentRow(
-				mockNames[i%len(mockNames)],
-				mockDeployStatuses[i%len(mockDeployStatuses)],
-				fmt.Sprintf("%07x", 0xa1b2c30+i*0x11111),
-				mockTimes[i%len(mockTimes)],
-			).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"border border-dashed border-zinc-300 dark:border-atom-border p-5 flex items-center justify-center gap-2 text-zinc-400 dark:text-atom-muted hover:text-zinc-600 dark:hover:text-atom-fg hover:border-zinc-400 dark:hover:border-atom-fg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors\"><i data-lucide=\"plus\" width=\"14\" height=\"14\"></i> <span class=\"text-xs font-bold uppercase tracking-widest\">New Project</span></a></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── BLUEPRINTS ────────────────────────────────────────────────────────────────
+func DashboardBlueprintsPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var8 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var8 == nil {
+			templ_7745c5c3_Var8 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardBlueprintsContent().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></div></div></div><div class=\"flex flex-col gap-6 lg:gap-8\"><div class=\"flex flex-col gap-3\"><h2 class=\"text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-widest\">Active Services</h2><div class=\"border border-zinc-200 dark:border-atom-border overflow-hidden\"><div class=\"max-h-96 overflow-y-auto scroll-container\">")
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Blueprints | Platform", userName, slug, "file-code-2", "Blueprints").Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for i := 0; i < 50; i++ {
-			templ_7745c5c3_Err = dashServiceRow(
-				mockNames[i%len(mockNames)],
-				mockSvcStatuses[i%len(mockSvcStatuses)],
-				mockSvcTypes[i%len(mockSvcTypes)],
-				mockMemory[i%len(mockMemory)],
-			).Render(ctx, templ_7745c5c3_Buffer)
+		return nil
+	})
+}
+
+func DashboardBlueprintsContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var10 == nil {
+			templ_7745c5c3_Var10 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("file-code-2", "Blueprints", "Reusable service blueprints will appear here.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── ENVIRONMENT GROUPS ────────────────────────────────────────────────────────
+func DashboardEnvGroupsPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var11 == nil {
+			templ_7745c5c3_Var11 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardEnvGroupsContent().Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Environment Groups | Platform", userName, slug, "layers-2", "Environment Groups").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></div></div></div></div></div>")
+		return nil
+	})
+}
+
+func DashboardEnvGroupsContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var13 == nil {
+			templ_7745c5c3_Var13 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("layers-2", "Environment Groups", "Shared environment variable groups will appear here.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── OBSERVABILITY ─────────────────────────────────────────────────────────────
+func DashboardObservabilityPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var14 == nil {
+			templ_7745c5c3_Var14 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardObservabilityContent().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Observability | Platform", userName, slug, "activity", "Observability").Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func DashboardObservabilityContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var16 == nil {
+			templ_7745c5c3_Var16 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("activity", "Observability", "Metrics, traces, and runtime telemetry will appear here.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+func DashboardNotificationsPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var17 == nil {
+			templ_7745c5c3_Var17 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardNotificationsContent().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Notifications | Platform", userName, slug, "bell", "Notifications").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func DashboardNotificationsContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("bell", "Notifications", "Deployment alerts and team notifications will appear here.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── PRIVATE LINKS ─────────────────────────────────────────────────────────────
+func DashboardPrivateLinksPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardPrivateLinksContent().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Private Links | Platform", userName, slug, "lock", "Private Links").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func DashboardPrivateLinksContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("lock", "Private Links", "Internal service-to-service networking will appear here.").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -180,12 +554,12 @@ func DashboardServicesPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var5 == nil {
-			templ_7745c5c3_Var5 = templ.NopComponent
+		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var23 == nil {
+			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var6 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var24 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -203,7 +577,7 @@ func DashboardServicesPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Services | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var6), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Services | Platform", userName, slug, "box", "Services").Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -227,12 +601,12 @@ func DashboardServicesContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var7 == nil {
-			templ_7745c5c3_Var7 = templ.NopComponent
+		templ_7745c5c3_Var25 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var25 == nil {
+			templ_7745c5c3_Var25 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"flex flex-col h-full\"><div class=\"px-6 lg:px-8 pt-6 lg:pt-8 pb-4 shrink-0\"><h1 class=\"text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight\">Services</h1></div><div class=\"px-6 lg:px-8 pb-6 lg:pb-8 flex flex-col min-h-0 flex-1\"><div class=\"border border-zinc-200 dark:border-atom-border flex flex-col min-h-0 flex-1\"><div class=\"flex items-center px-5 py-2 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface shrink-0\"><span class=\"w-2 shrink-0\"></span> <span class=\"ml-3 text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest flex-1\">Service</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-12\">Type</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16 text-right\">Memory</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-20 text-right\">State</span></div><div class=\"overflow-y-auto flex-1 min-h-0 scroll-container\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div data-page-title=\"Services\" data-page-icon=\"box\" class=\"flex flex-col h-full\"><div class=\"px-6 lg:px-8 pt-6 lg:pt-8 pb-4 shrink-0\"></div><div class=\"px-6 lg:px-8 pb-6 lg:pb-8 flex flex-col min-h-0 flex-1\"><div class=\"border border-zinc-200 dark:border-atom-border flex flex-col min-h-0 flex-1\"><div class=\"flex items-center px-5 py-2 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface shrink-0\"><span class=\"w-2 shrink-0\"></span> <span class=\"ml-3 text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest flex-1\">Service</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-12\">Type</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16 text-right\">Memory</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-20 text-right\">State</span></div><div class=\"overflow-y-auto flex-1 min-h-0 scroll-container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -272,12 +646,12 @@ func DashboardDeploymentsPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var8 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var8 == nil {
-			templ_7745c5c3_Var8 = templ.NopComponent
+		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var26 == nil {
+			templ_7745c5c3_Var26 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var9 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var27 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -295,7 +669,7 @@ func DashboardDeploymentsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Deployments | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Deployments | Platform", userName, slug, "rocket", "Deployments").Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -319,12 +693,12 @@ func DashboardDeploymentsContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
+		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var28 == nil {
+			templ_7745c5c3_Var28 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"flex flex-col h-full\"><div class=\"px-6 lg:px-8 pt-6 lg:pt-8 pb-4 flex items-center shrink-0\"><h1 class=\"text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight flex-1\">Deployments</h1><button class=\"flex items-center justify-center w-8 h-8 text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-surface transition-colors\"><i data-lucide=\"more-horizontal\" width=\"16\" height=\"16\"></i></button></div><div class=\"px-6 lg:px-8 pb-4 flex flex-wrap items-center gap-3 shrink-0\"><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\"><i data-lucide=\"calendar\" width=\"12\" height=\"12\" class=\"text-zinc-400 dark:text-atom-muted\"></i> Select Date Range</button><div class=\"flex-1\"></div><div class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg w-44\"><i data-lucide=\"search\" width=\"12\" height=\"12\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <input type=\"text\" placeholder=\"All Authors...\" class=\"flex-1 bg-transparent text-[11px] font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none min-w-0\"> <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i></div><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\">All Environments <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted\"></i></button><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\"><span class=\"flex items-center gap-0.5\"><span class=\"w-1.5 h-1.5 rounded-full bg-emerald-500\"></span> <span class=\"w-1.5 h-1.5 rounded-full bg-yellow-500\"></span> <span class=\"w-1.5 h-1.5 rounded-full bg-red-500\"></span></span> Status <span class=\"text-zinc-400 dark:text-atom-muted\">5/6</span> <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted\"></i></button></div><div class=\"px-6 lg:px-8 pb-6 lg:pb-8 flex flex-col min-h-0 flex-1\"><div class=\"border border-zinc-200 dark:border-atom-border flex flex-col min-h-0 flex-1\"><div class=\"flex items-center px-5 py-2 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface shrink-0\"><span class=\"w-2 shrink-0\"></span> <span class=\"ml-3 text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest flex-1\">Service</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16\">Commit</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16 text-right\">Time</span></div><div class=\"overflow-y-auto flex-1 min-h-0 scroll-container\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div data-page-title=\"Deployments\" data-page-icon=\"rocket\" class=\"flex flex-col h-full\"><div class=\"px-6 lg:px-8 pt-6 lg:pt-8 pb-4 flex items-center justify-end shrink-0\"><button class=\"flex items-center justify-center w-8 h-8 text-zinc-400 dark:text-atom-muted hover:text-zinc-900 dark:hover:text-atom-fg hover:bg-zinc-100 dark:hover:bg-atom-surface transition-colors\"><i data-lucide=\"more-horizontal\" width=\"16\" height=\"16\"></i></button></div><div class=\"px-6 lg:px-8 pb-4 flex flex-wrap items-center gap-3 shrink-0\"><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\"><i data-lucide=\"calendar\" width=\"12\" height=\"12\" class=\"text-zinc-400 dark:text-atom-muted\"></i> Select Date Range</button><div class=\"flex-1\"></div><div class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg w-44\"><i data-lucide=\"search\" width=\"12\" height=\"12\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i> <input type=\"text\" placeholder=\"All Authors...\" class=\"flex-1 bg-transparent text-[11px] font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none min-w-0\"> <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted shrink-0\"></i></div><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\">All Environments <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted\"></i></button><button class=\"flex items-center gap-2 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg hover:bg-zinc-50 dark:hover:bg-atom-surface transition-colors text-[11px] font-mono text-zinc-600 dark:text-atom-fg\"><span class=\"flex items-center gap-0.5\"><span class=\"w-1.5 h-1.5 rounded-full bg-emerald-500\"></span> <span class=\"w-1.5 h-1.5 rounded-full bg-yellow-500\"></span> <span class=\"w-1.5 h-1.5 rounded-full bg-red-500\"></span></span> Status <span class=\"text-zinc-400 dark:text-atom-muted\">5/6</span> <i data-lucide=\"chevron-down\" width=\"10\" height=\"10\" class=\"text-zinc-400 dark:text-atom-muted\"></i></button></div><div class=\"px-6 lg:px-8 pb-6 lg:pb-8 flex flex-col min-h-0 flex-1\"><div class=\"border border-zinc-200 dark:border-atom-border flex flex-col min-h-0 flex-1\"><div class=\"flex items-center px-5 py-2 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface shrink-0\"><span class=\"w-2 shrink-0\"></span> <span class=\"ml-3 text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest flex-1\">Service</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16\">Commit</span> <span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-16 text-right\">Time</span></div><div class=\"overflow-y-auto flex-1 min-h-0 scroll-container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -364,12 +738,12 @@ func DashboardLogsPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var11 == nil {
-			templ_7745c5c3_Var11 = templ.NopComponent
+		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var29 == nil {
+			templ_7745c5c3_Var29 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var12 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var30 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -387,7 +761,7 @@ func DashboardLogsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Logs | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Logs | Platform", userName, slug, "scroll-text", "Logs").Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -411,9 +785,9 @@ func DashboardLogsContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var13 == nil {
-			templ_7745c5c3_Var13 = templ.NopComponent
+		templ_7745c5c3_Var31 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var31 == nil {
+			templ_7745c5c3_Var31 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = dashPlaceholderPage("scroll-text", "Logs", "Runtime and build logs will stream here.").Render(ctx, templ_7745c5c3_Buffer)
@@ -441,12 +815,12 @@ func DashboardSecretsPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var14 == nil {
-			templ_7745c5c3_Var14 = templ.NopComponent
+		templ_7745c5c3_Var32 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var32 == nil {
+			templ_7745c5c3_Var32 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var33 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -464,7 +838,7 @@ func DashboardSecretsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Secrets | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Secrets | Platform", userName, slug, "key", "Secrets").Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -488,9 +862,9 @@ func DashboardSecretsContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var16 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var16 == nil {
-			templ_7745c5c3_Var16 = templ.NopComponent
+		templ_7745c5c3_Var34 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var34 == nil {
+			templ_7745c5c3_Var34 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = dashPlaceholderPage("key", "Secrets", "Encrypted environment variables and secrets will appear here.").Render(ctx, templ_7745c5c3_Buffer)
@@ -518,12 +892,12 @@ func DashboardDomainsPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var17 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var17 == nil {
-			templ_7745c5c3_Var17 = templ.NopComponent
+		templ_7745c5c3_Var35 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var35 == nil {
+			templ_7745c5c3_Var35 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var18 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var36 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -541,7 +915,7 @@ func DashboardDomainsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Domains | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Domains | Platform", userName, slug, "globe", "Domains").Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -565,12 +939,89 @@ func DashboardDomainsContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var19 == nil {
-			templ_7745c5c3_Var19 = templ.NopComponent
+		templ_7745c5c3_Var37 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var37 == nil {
+			templ_7745c5c3_Var37 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = dashPlaceholderPage("globe", "Domains", "Custom domains and TLS certificates will appear here.").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// ── WEBHOOKS ─────────────────────────────────────────────────────────────────
+func DashboardWebhooksPage(userName string, slug string) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var38 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var38 == nil {
+			templ_7745c5c3_Var38 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Var39 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = DashboardWebhooksContent().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = components.DashboardLayout("Webhooks | Platform", userName, slug, "webhook", "Webhooks").Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func DashboardWebhooksContent() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var40 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var40 == nil {
+			templ_7745c5c3_Var40 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = dashPlaceholderPage("webhook", "Webhooks", "Webhook endpoints and delivery history will appear here.").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -595,12 +1046,12 @@ func DashboardSettingsPage(userName string, slug string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var20 == nil {
-			templ_7745c5c3_Var20 = templ.NopComponent
+		templ_7745c5c3_Var41 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var41 == nil {
+			templ_7745c5c3_Var41 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var21 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var42 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -618,7 +1069,7 @@ func DashboardSettingsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Settings | Platform", userName, slug).Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Settings | Platform", userName, slug, "settings", "Settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -642,12 +1093,12 @@ func DashboardSettingsContent() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var22 == nil {
-			templ_7745c5c3_Var22 = templ.NopComponent
+		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var43 == nil {
+			templ_7745c5c3_Var43 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"p-6 lg:p-8 flex flex-col gap-6\"><h1 class=\"text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight\">Team Settings</h1><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Identity</span></div><div class=\"flex flex-col gap-0 divide-y divide-zinc-200 dark:divide-atom-border\"><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Team Name</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Display name for this team.</span></div><input type=\"text\" placeholder=\"My Team\" class=\"w-48 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg text-xs font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none focus:border-zinc-400 dark:focus:border-atom-fg\"></div><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Slug</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Used in URLs. Cannot be changed.</span></div><span class=\"text-[11px] font-mono text-zinc-500 dark:text-atom-muted px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface\">team-slug</span></div></div></div><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface flex items-center justify-between\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Members</span> <button class=\"px-3 py-1 bg-zinc-900 dark:bg-white text-[10px] font-bold text-white dark:text-zinc-900 uppercase tracking-widest hover:opacity-80 transition-opacity\">Invite</button></div><div class=\"flex flex-col items-center justify-center py-12 gap-3\"><i data-lucide=\"users\" width=\"16\" height=\"16\" class=\"text-zinc-300 dark:text-atom-border\"></i> <span class=\"text-[11px] font-mono text-zinc-500 dark:text-atom-muted\">Member management coming soon.</span></div></div><div class=\"border border-red-200 dark:border-atom-red/30\"><div class=\"px-5 py-3 border-b border-red-200 dark:border-atom-red/30 bg-red-50 dark:bg-atom-red/5\"><span class=\"text-[10px] font-bold text-red-500 dark:text-atom-red uppercase tracking-widest\">Danger Zone</span></div><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Delete Team</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Permanently deletes all projects, services, and deployments.</span></div><button class=\"px-4 py-1.5 border border-red-300 dark:border-atom-red/50 text-[10px] font-bold text-red-600 dark:text-atom-red uppercase tracking-widest hover:bg-red-50 dark:hover:bg-atom-red/10 transition-colors\" disabled>Delete Team</button></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div data-page-title=\"Settings\" data-page-icon=\"settings\" class=\"p-6 lg:p-8 flex flex-col gap-6\"><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Identity</span></div><div class=\"flex flex-col gap-0 divide-y divide-zinc-200 dark:divide-atom-border\"><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Team Name</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Display name for this team.</span></div><input type=\"text\" placeholder=\"My Team\" class=\"w-48 px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-white dark:bg-atom-bg text-xs font-mono text-zinc-900 dark:text-atom-fg placeholder-zinc-400 dark:placeholder-atom-muted outline-none focus:border-zinc-400 dark:focus:border-atom-fg\"></div><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Slug</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Used in URLs. Cannot be changed.</span></div><span class=\"text-[11px] font-mono text-zinc-500 dark:text-atom-muted px-3 py-1.5 border border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface\">team-slug</span></div></div></div><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface flex items-center justify-between\"><span class=\"text-[10px] font-bold text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">Members</span> <button class=\"px-3 py-1 bg-zinc-900 dark:bg-white text-[10px] font-bold text-white dark:text-zinc-900 uppercase tracking-widest hover:opacity-80 transition-opacity\">Invite</button></div><div class=\"flex flex-col items-center justify-center py-12 gap-3\"><i data-lucide=\"users\" width=\"16\" height=\"16\" class=\"text-zinc-300 dark:text-atom-border\"></i> <span class=\"text-[11px] font-mono text-zinc-500 dark:text-atom-muted\">Member management coming soon.</span></div></div><div class=\"border border-red-200 dark:border-atom-red/30\"><div class=\"px-5 py-3 border-b border-red-200 dark:border-atom-red/30 bg-red-50 dark:bg-atom-red/5\"><span class=\"text-[10px] font-bold text-red-500 dark:text-atom-red uppercase tracking-widest\">Danger Zone</span></div><div class=\"flex items-center justify-between px-5 py-4\"><div class=\"flex flex-col gap-0.5\"><span class=\"text-xs font-bold text-zinc-900 dark:text-atom-fg uppercase tracking-widest\">Delete Team</span> <span class=\"text-[11px] text-zinc-500 dark:text-atom-muted\">Permanently deletes all projects, services, and deployments.</span></div><button class=\"px-4 py-1.5 border border-red-300 dark:border-atom-red/50 text-[10px] font-bold text-red-600 dark:text-atom-red uppercase tracking-widest hover:bg-red-50 dark:hover:bg-atom-red/10 transition-colors\" disabled>Delete Team</button></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -672,51 +1123,64 @@ func dashPlaceholderPage(icon string, title string, desc string) templ.Component
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var23 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var23 == nil {
-			templ_7745c5c3_Var23 = templ.NopComponent
+		templ_7745c5c3_Var44 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var44 == nil {
+			templ_7745c5c3_Var44 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"p-6 lg:p-8 flex flex-col gap-6\"><h1 class=\"text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div data-page-title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		var templ_7745c5c3_Var45 string
+		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 312, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 354, Col: 29}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</h1><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"flex flex-col items-center justify-center py-24 gap-4\"><i data-lucide=\"")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 315, Col: 25}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" data-page-icon=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" width=\"20\" height=\"20\" class=\"text-zinc-300 dark:text-atom-border\"></i><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono\">")
+		var templ_7745c5c3_Var46 string
+		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 354, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 316, Col: 74}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" class=\"p-6 lg:p-8 flex flex-col gap-6\"><div class=\"border border-zinc-200 dark:border-atom-border\"><div class=\"flex flex-col items-center justify-center py-24 gap-4\"><i data-lucide=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</p></div></div></div>")
+		var templ_7745c5c3_Var47 string
+		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(icon)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 357, Col: 25}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" width=\"20\" height=\"20\" class=\"text-zinc-300 dark:text-atom-border\"></i><p class=\"text-xs text-zinc-500 dark:text-atom-muted font-mono\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var48 string
+		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(desc)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 358, Col: 74}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -740,38 +1204,38 @@ func dashUsageRow(label string, value string, limit string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var27 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var27 == nil {
-			templ_7745c5c3_Var27 = templ.NopComponent
+		templ_7745c5c3_Var49 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var49 == nil {
+			templ_7745c5c3_Var49 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"flex items-center justify-between px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0\"><div class=\"flex items-center gap-3\"><span class=\"w-2 h-2 rounded-full bg-zinc-300 dark:bg-atom-border shrink-0\"></span> <span class=\"text-xs text-zinc-900 dark:text-atom-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"flex items-center justify-between px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0\"><div class=\"flex items-center gap-3\"><span class=\"w-2 h-2 rounded-full bg-zinc-300 dark:bg-atom-border shrink-0\"></span> <span class=\"text-xs text-zinc-900 dark:text-atom-fg\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var28 string
-		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var50 string
+		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 326, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 368, Col: 64}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</span></div><span class=\"text-xs font-mono text-zinc-500 dark:text-atom-muted\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var29 string
-		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(value + " / " + limit)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 328, Col: 92}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span></div><span class=\"text-xs font-mono text-zinc-500 dark:text-atom-muted\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</span></div>")
+		var templ_7745c5c3_Var51 string
+		templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(value + " / " + limit)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 370, Col: 92}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -795,71 +1259,71 @@ func dashDeploymentRow(name string, status string, hash string, timeAgo string) 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var30 == nil {
-			templ_7745c5c3_Var30 = templ.NopComponent
+		templ_7745c5c3_Var52 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var52 == nil {
+			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"flex items-center px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0 hover:bg-zinc-50 dark:hover:bg-atom-surface\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<div class=\"flex items-center px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0 hover:bg-zinc-50 dark:hover:bg-atom-surface\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if status == "success" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<span class=\"w-2 h-2 rounded-full bg-emerald-500 shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"w-2 h-2 rounded-full bg-emerald-500 shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if status == "building" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"w-2 h-2 rounded-full bg-yellow-500 shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"w-2 h-2 rounded-full bg-yellow-500 shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"w-2 h-2 rounded-full bg-red-500 shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"w-2 h-2 rounded-full bg-red-500 shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"ml-3 text-xs font-bold text-zinc-900 dark:text-atom-fg truncate\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<span class=\"ml-3 text-xs font-bold text-zinc-900 dark:text-atom-fg truncate\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var31 string
-		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		var templ_7745c5c3_Var53 string
+		templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 341, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 383, Col: 86}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</span> <span class=\"ml-auto text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(hash)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 342, Col: 101}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</span> <span class=\"ml-auto text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16 text-right\">")
+		var templ_7745c5c3_Var54 string
+		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(hash)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 384, Col: 101}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(timeAgo)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 343, Col: 107}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16 text-right\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span></div>")
+		var templ_7745c5c3_Var55 string
+		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(timeAgo)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 385, Col: 107}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -883,91 +1347,91 @@ func dashServiceRow(name string, status string, svcType string, memory string) t
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var34 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var34 == nil {
-			templ_7745c5c3_Var34 = templ.NopComponent
+		templ_7745c5c3_Var56 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var56 == nil {
+			templ_7745c5c3_Var56 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"flex items-center px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0 hover:bg-zinc-50 dark:hover:bg-atom-surface\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"flex items-center px-5 py-3 border-b border-zinc-200 dark:border-atom-border last:border-b-0 hover:bg-zinc-50 dark:hover:bg-atom-surface\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if status == "running" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"w-2 h-2 rounded-full bg-emerald-500 shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span class=\"w-2 h-2 rounded-full bg-emerald-500 shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if status == "deploying" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span class=\"w-2 h-2 rounded-full bg-yellow-500 shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<span class=\"w-2 h-2 rounded-full bg-yellow-500 shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<span class=\"w-2 h-2 rounded-full bg-zinc-300 dark:bg-atom-border shrink-0\"></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<span class=\"w-2 h-2 rounded-full bg-zinc-300 dark:bg-atom-border shrink-0\"></span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<span class=\"ml-3 text-xs font-bold text-zinc-900 dark:text-atom-fg truncate flex-1\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<span class=\"ml-3 text-xs font-bold text-zinc-900 dark:text-atom-fg truncate flex-1\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var35 string
-		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		var templ_7745c5c3_Var57 string
+		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 356, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 398, Col: 93}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-12\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var36 string
-		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(svcType)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 357, Col: 96}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-12\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16 text-right\">")
+		var templ_7745c5c3_Var58 string
+		templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(svcType)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 399, Col: 96}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var37 string
-		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(memory)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 358, Col: 106}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</span> <span class=\"text-[10px] font-mono text-zinc-500 dark:text-atom-muted shrink-0 w-16 text-right\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</span> ")
+		var templ_7745c5c3_Var59 string
+		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(memory)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/ui/pages/dashboard.templ`, Line: 400, Col: 106}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if status == "running" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<span class=\"text-[10px] font-mono text-green-600 dark:text-atom-green uppercase tracking-widest shrink-0 w-20 text-right\">Running</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"text-[10px] font-mono text-green-600 dark:text-atom-green uppercase tracking-widest shrink-0 w-20 text-right\">Running</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if status == "deploying" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<span class=\"text-[10px] font-mono text-yellow-600 dark:text-atom-yellow uppercase tracking-widest shrink-0 w-20 text-right\">Deploying</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<span class=\"text-[10px] font-mono text-yellow-600 dark:text-atom-yellow uppercase tracking-widest shrink-0 w-20 text-right\">Deploying</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-20 text-right\">Stopped</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest shrink-0 w-20 text-right\">Stopped</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

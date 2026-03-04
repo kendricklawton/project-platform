@@ -3,14 +3,13 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ AccountPage(userName string, email string, slug string) {
-	@components.DashboardLayout("Account | Platform", userName, slug) {
+	@components.DashboardLayout("Account | Platform", userName, slug, "user", "Account") {
 		@AccountContent(userName, email, slug)
 	}
 }
 
 templ AccountContent(userName string, email string, slug string) {
-	<div class="p-6 lg:p-8 flex flex-col gap-6">
-		<h1 class="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Account Settings</h1>
+	<div data-page-title="Account" data-page-icon="user" class="p-6 lg:p-8 flex flex-col gap-6">
 		// Profile
 		<div class="border border-zinc-200 dark:border-atom-border">
 			<div class="px-5 py-3 border-b border-zinc-200 dark:border-atom-border bg-zinc-100 dark:bg-atom-surface">

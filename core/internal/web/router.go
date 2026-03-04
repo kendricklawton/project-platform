@@ -21,6 +21,7 @@ func (h *Handler) Routes() chi.Router {
 	router.Get("/", h.Splash)
 	router.Get("/about", h.About)
 	router.Get("/templates", h.Templates)
+	router.Get("/templates/{slug}", h.TemplateDetail)
 	router.Get("/changelog", h.Changelog)
 	router.Get("/pricing", h.Pricing)
 	router.Get("/healthz", h.Healthz)
@@ -31,8 +32,10 @@ func (h *Handler) Routes() chi.Router {
 	router.Route("/auth", func(auth chi.Router) {
 		auth.Get("/login", h.AuthLogin)
 		auth.Get("/callback", h.AuthCallback)
-		auth.Get("/logout", h.AuthLogout)  // kept for direct URL navigation
-		auth.Post("/logout", h.AuthLogout) // form POST from the Sign Out button
+		auth.Get("/logout", h.AuthLogout)     // kept for direct URL navigation
+		auth.Post("/logout", h.AuthLogout)    // form POST from the Sign Out button
+		auth.Get("/cli/login", h.AuthCLILogin)
+		auth.Get("/cli/callback", h.AuthCLICallback)
 	})
 
 	// /dashboard → redirect to /{slug} using the slug cookie
@@ -47,10 +50,19 @@ func (h *Handler) Routes() chi.Router {
 		protected.Get("/{slug}/logs", h.DashboardLogs)
 		protected.Get("/{slug}/secrets", h.DashboardSecrets)
 		protected.Get("/{slug}/domains", h.DashboardDomains)
+		protected.Get("/{slug}/webhooks", h.DashboardWebhooks)
+		protected.Get("/{slug}/billing", h.DashboardBilling)
+		protected.Get("/{slug}/blueprints", h.DashboardBlueprints)
+		protected.Get("/{slug}/env-groups", h.DashboardEnvGroups)
+		protected.Get("/{slug}/observability", h.DashboardObservability)
+		protected.Get("/{slug}/notifications", h.DashboardNotifications)
+		protected.Get("/{slug}/private-links", h.DashboardPrivateLinks)
 		protected.Get("/{slug}/settings", h.DashboardSettings)
 		protected.Get("/settings", h.Settings)
 		protected.Get("/account", h.Account)
 		protected.Post("/account/delete", h.AccountDelete)
+		protected.Get("/new-team", h.NewTeam)
+		protected.Post("/new-team", h.NewTeamPost)
 	})
 
 	return router

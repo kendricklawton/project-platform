@@ -4,6 +4,7 @@
 @source "../../**/*.go";
 
 @theme {
+    --font-sans: "Inter", sans-serif;
     --font-mono: "Roboto Mono", monospace;
     --animate-loading: loading 2s ease-in-out infinite;
     --animate-corner-ripple: corner-ripple 8s ease-out infinite;

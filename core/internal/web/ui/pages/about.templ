@@ -14,7 +14,7 @@ templ AboutContent(userName string) {
 		// ── HERO ──────────────────────────────────────────────────────────────
 		<section class="relative z-10 flex flex-col gap-6 max-w-3xl">
 			<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">{ "// about" }</span>
-			<h1 class="text-5xl sm:text-6xl font-black tracking-tighter leading-[0.9]">
+			<h1 class="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-[0.9]">
 				<span class="text-zinc-900 dark:text-white">A HOME FOR</span>
 				<br/>
 				<span class="text-zinc-400 dark:text-atom-muted">COMPILED</span>
@@ -52,16 +52,27 @@ templ AboutContent(userName string) {
 				<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">{ "// founder" }</span>
 				<h2 class="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-widest mt-1">Kendrick Lawton.</h2>
 			</div>
-			<div class="border border-zinc-200 dark:border-atom-border">
-				<div class="bg-white dark:bg-atom-bg p-8 flex flex-col gap-6">
-					<p class="text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose">
-						I was a gamer before I was a developer. That's where I learned that systems have rules — and if you understand the rules deeply enough, you can work with them in ways the designers never intended. That mindset carried over directly into code.
-					</p>
-					<p class="text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose">
-						I got into software the way a lot of people do — through the web. It was accessible, there were tutorials, things worked fast. But the pull was always lower. I wanted to know what was underneath. How the container actually runs. Why the network behaves the way it does. What the kernel is doing while the application sleeps.
-					</p>
-					<p class="text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose">
-						I have been a gamer. I have been a developer. The goal now is to be a platform builder — someone who doesn't just use the infrastructure but designs and operates it. Project Platform is the direct expression of that goal. Not a side project. Not a portfolio piece. The thing itself.
+			<div class="grid md:grid-cols-3 gap-px bg-zinc-200 dark:bg-atom-border border border-zinc-200 dark:border-atom-border mb-px">
+				<div class="bg-white dark:bg-atom-bg p-8 flex flex-col gap-3">
+					<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">01_ input</span>
+					<h3 class="text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest">Read Everything.</h3>
+					<p class="text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose">Technical books cover to cover. Not tutorials — the actual texts. SICP. Operating systems. Distributed systems. The fundamentals that most engineers skip because there's a library for it.</p>
+				</div>
+				<div class="bg-white dark:bg-atom-bg p-8 flex flex-col gap-3">
+					<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">02_ discipline</span>
+					<h3 class="text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest">Grind The Patterns.</h3>
+					<p class="text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose">LeetCode until the algorithms are reflexive. Not for interviews — for the habit of breaking a problem down until it has a shape, then writing toward that shape with precision.</p>
+				</div>
+				<div class="bg-white dark:bg-atom-bg p-8 flex flex-col gap-3">
+					<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">03_ leverage</span>
+					<h3 class="text-xs font-black text-zinc-900 dark:text-white uppercase tracking-widest">Use Every Tool.</h3>
+					<p class="text-[10px] font-mono text-zinc-500 dark:text-atom-muted leading-loose">AI agents compress months into weeks. That's not cheating — that's engineering. The leverage belongs to whoever picks it up. This platform exists because I picked it up.</p>
+				</div>
+			</div>
+			<div class="border border-zinc-200 dark:border-atom-border border-t-0">
+				<div class="bg-white dark:bg-atom-bg px-8 py-6">
+					<p class="text-xs text-zinc-500 dark:text-atom-muted font-mono leading-loose border-l-2 border-zinc-300 dark:border-atom-border pl-4">
+						Read. Grind. Build with agents. That's me — and this platform is what it looks like when I apply that combination seriously to infrastructure.
 					</p>
 				</div>
 			</div>

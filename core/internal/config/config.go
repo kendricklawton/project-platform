@@ -10,8 +10,6 @@ type ServerConfig struct {
 	Port           int
 	Debug          bool
 	DatabaseURL    string
-	WorkOSAPIKey   string
-	WorkOSClientID string
 	InternalSecret string
 }
 
@@ -30,12 +28,6 @@ func LoadServer() (*ServerConfig, error) {
 	if cfg.DatabaseURL, err = getEnvRequired("PLATFORM_DATABASE_URL"); err != nil {
 		return nil, err
 	}
-	if cfg.WorkOSAPIKey, err = getEnvRequired("WORKOS_API_KEY"); err != nil {
-		return nil, err
-	}
-	if cfg.WorkOSClientID, err = getEnvRequired("WORKOS_CLIENT_ID"); err != nil {
-		return nil, err
-	}
 	if cfg.InternalSecret, err = getEnvRequired("PLATFORM_INTERNAL_SECRET"); err != nil {
 		return nil, err
 	}
@@ -45,14 +37,15 @@ func LoadServer() (*ServerConfig, error) {
 
 // WEB BFF CONFIGURATION (For platform-web)
 type WebConfig struct {
-	Port              int
-	Debug             bool
-	APIURL            string
-	WebBaseURL        string
-	InternalSecret    string
-	WorkOSAPIKey      string
-	WorkOSClientID    string
-	WorkOSRedirectURI string
+	Port                 int
+	Debug                bool
+	APIURL               string
+	WebBaseURL           string
+	InternalSecret       string
+	WorkOSAPIKey         string
+	WorkOSClientID       string
+	WorkOSRedirectURI    string
+	WorkOSCLIRedirectURI string
 }
 
 func LoadWeb() (*WebConfig, error) {
@@ -80,6 +73,7 @@ func LoadWeb() (*WebConfig, error) {
 	}
 
 	cfg.WorkOSRedirectURI = getEnv("WORKOS_WEB_REDIRECT_URI", "http://localhost:3000/auth/callback")
+	cfg.WorkOSCLIRedirectURI = getEnv("WORKOS_CLI_REDIRECT_URI", "http://localhost:3000/auth/cli/callback")
 
 	return cfg, nil
 }

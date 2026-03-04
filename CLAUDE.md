@@ -33,8 +33,8 @@ Read these first. Violation of these rules is a failure of the prompt.
 ## 02_ RESOURCE LIMITS (CURRENT TIERS)
 Static Go/Rust binaries idle at 10–50 MB RSS. Limits are **account-wide totals**, not per-service.
 Do NOT show raw RAM/vCPU numbers on user-facing pages — abstract like Vercel/Render do.
-- **Free:** 1 project · up to 3 services · 1 custom domain · 10 GB egress/month · 200 build min/month · (internal: 128 MB RAM · 0.5 vCPU)
-- **Pro (~$20/mo):** up to 10 projects · up to 10 services/project · up to 5 team members · 100 GB egress/month · 2,000 build min/month · (internal: 1 GB RAM · 2 vCPU)
+- **Free:** 1 project · up to 3 services · unlimited custom domains + auto TLS · 10 GB egress/month · 200 build min/month
+- **Pro (~$20/member/mo):** up to 10 projects · up to 10 services/project · unlimited team members · keep service awake (no cold starts) · 100 GB egress/month · 2,000 build min/month
 
 ## 03_ BACKEND STRATEGY (CORE API)
 - **Runtime:** Go (Standard Library absolute priority). Module path: `github.com/kendricklawton/project-platform/core`.
@@ -51,7 +51,7 @@ Do NOT show raw RAM/vCPU numbers on user-facing pages — abstract like Vercel/R
 - **Routing:** `chi` router. Public routes at top level; protected routes behind `RequireAuth` middleware group.
 - **Icons:** Lucide CDN (`data-lucide="icon-name"`). `lucide.createIcons()` called on `DOMContentLoaded` and `htmx:afterSwap`.
 - **Theme:** Dual-mode. Light = Tailwind `zinc` scale. Dark = Atom One Dark (`atom-bg`, `atom-surface`, `atom-border`, `atom-fg`, `atom-muted`, `atom-blue`, `atom-green`, `atom-yellow`, `atom-red`, `atom-cyan`).
-- **Font:** Roboto Mono (Google Fonts CDN). All text `font-mono`.
+- **Font:** Inter (Google Fonts CDN) for body/UI text (`font-sans`). Roboto Mono (`font-mono`) reserved for terminal labels, section markers (`// name`), code blocks, and CLI mockups.
 
 ## 05_ AESTHETIC DIRECTIVES (THE VIBE)
 The UI is a control panel, not a consumer SaaS. It must feel like a terminal environment with a deliberate design system.
