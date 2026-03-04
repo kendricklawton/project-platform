@@ -291,6 +291,22 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	pages.DashboardPage(userName, slug).Render(r.Context(), w)
 }
 
+// Project renders the project overview page.
+func (h *Handler) Project(w http.ResponseWriter, r *http.Request) {
+	userName, slug := h.dashboardSlug(w, r)
+	if slug == "" {
+		return
+	}
+	projectID := chi.URLParam(r, "projectID")
+	projectName := projectID
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.isDashboardSwap(r) {
+		pages.ProjectContent(slug, projectID, projectName).Render(r.Context(), w)
+		return
+	}
+	pages.ProjectPage(userName, slug, projectID, projectName).Render(r.Context(), w)
+}
+
 // DashboardServices renders the services page.
 func (h *Handler) DashboardServices(w http.ResponseWriter, r *http.Request) {
 	userName, slug := h.dashboardSlug(w, r)

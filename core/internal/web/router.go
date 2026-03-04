@@ -45,6 +45,7 @@ func (h *Handler) Routes() chi.Router {
 	router.Group(func(protected chi.Router) {
 		protected.Use(h.RequireAuth)
 		protected.Get("/{slug}", h.Dashboard)
+		protected.Get("/{slug}/projects/{projectID}", h.Project)
 		protected.Get("/{slug}/services", h.DashboardServices)
 		protected.Get("/{slug}/deployments", h.DashboardDeployments)
 		protected.Get("/{slug}/logs", h.DashboardLogs)
