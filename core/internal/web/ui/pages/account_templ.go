@@ -49,7 +49,7 @@ func AccountPage(userName string, email string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Account | Machine Name", userName, slug, "user", "Account").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Account | Project Platform", userName, slug, "user", "Account").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

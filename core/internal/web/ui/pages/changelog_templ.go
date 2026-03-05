@@ -49,7 +49,7 @@ func ChangelogPage(userName string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.Layout("Changelog | Machine Name", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.Layout("Changelog | Project Platform", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -78,7 +78,7 @@ func ChangelogContent(userName string) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<title>Changelog | Machine Name</title><div class=\"flex flex-col gap-24 py-12 relative\"><section class=\"relative z-10 flex flex-col gap-6 max-w-3xl\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<title>Changelog | Project Platform</title><div class=\"flex flex-col gap-24 py-12 relative\"><section class=\"relative z-10 flex flex-col gap-6 max-w-3xl\"><span class=\"text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -49,7 +49,7 @@ func DocsPage(slug, title, content string, userName string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.Layout(title+" | Machine Name", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.Layout(title+" | Project Platform", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -91,7 +91,7 @@ func DocsContent(slug, title, content string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " | Machine Name</title><div class=\"flex gap-0 -mx-4 sm:-mx-6 -mt-12\"><aside class=\"hidden md:flex flex-col w-56 shrink-0 border-r border-zinc-200 dark:border-atom-border pt-12\"><nav class=\"sticky top-20 px-4 py-6 flex flex-col gap-6 overflow-y-auto\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " | Project Platform</title><div class=\"flex gap-0 -mx-4 sm:-mx-6 -mt-12\"><aside class=\"hidden md:flex flex-col w-56 shrink-0 border-r border-zinc-200 dark:border-atom-border pt-12\"><nav class=\"sticky top-20 px-4 py-6 flex flex-col gap-6 overflow-y-auto\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

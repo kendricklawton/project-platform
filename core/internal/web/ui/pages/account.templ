@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ AccountPage(userName string, email string, slug string) {
-	@components.DashboardLayout("Account | Machine Name", userName, slug, "user", "Account") {
+	@components.DashboardLayout("Account | Project Platform", userName, slug, "user", "Account") {
 		@AccountContent(userName, email, slug)
 	}
 }

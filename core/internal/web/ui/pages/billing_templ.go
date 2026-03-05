@@ -49,7 +49,7 @@ func DashboardBillingPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Billing | Machine Name", userName, slug, "credit-card", "Billing").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Billing | Project Platform", userName, slug, "credit-card", "Billing").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

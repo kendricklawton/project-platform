@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ SplashPage(status string, userName string) {
-	@components.Layout("Machine Name | The cloud for compiled languages", userName) {
+	@components.Layout("Project Platform | The cloud for compiled languages", userName) {
 		@SplashContent(status, userName)
 	}
 }

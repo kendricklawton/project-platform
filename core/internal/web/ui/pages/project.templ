@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ ProjectPage(userName string, workspaceSlug string, projectID string, projectName string) {
-	@components.ProjectLayout(projectName+" | Machine Name", userName, workspaceSlug, projectID, projectName) {
+	@components.ProjectLayout(projectName+" | Project Platform", userName, workspaceSlug, projectID, projectName) {
 		@ProjectContent(workspaceSlug, projectID, projectName)
 	}
 }

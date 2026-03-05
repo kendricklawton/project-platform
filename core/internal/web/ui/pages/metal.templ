@@ -3,13 +3,13 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ MetalComputePage(userName string) {
-	@components.Layout("Metal Compute | Machine Name", userName) {
+	@components.Layout("Metal Compute | Project Platform", userName) {
 		@MetalComputeContent(userName)
 	}
 }
 
 templ MetalComputeContent(userName string) {
-	<title>Metal Compute | Machine Name</title>
+	<title>Metal Compute | Project Platform</title>
 	// ── HERO ──────────────────────────────────────────────────────────────────
 	<div class="relative mt-8">
 		<section class="relative flex items-center justify-center overflow-hidden" style="min-height:85vh;">

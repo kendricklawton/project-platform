@@ -17,7 +17,7 @@ var (
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────────
 templ DashboardPage(userName string, slug string) {
-	@components.DashboardLayout("Projects | Machine Name", userName, slug, "layout-grid", "Projects") {
+	@components.DashboardLayout("Projects | Project Platform", userName, slug, "layout-grid", "Projects") {
 		@DashboardContent(userName, slug)
 	}
 }
@@ -61,7 +61,7 @@ templ DashboardContent(userName string, slug string) {
 
 // ── BLUEPRINTS ────────────────────────────────────────────────────────────────
 templ DashboardBlueprintsPage(userName string, slug string) {
-	@components.DashboardLayout("Blueprints | Machine Name", userName, slug, "file-code-2", "Blueprints") {
+	@components.DashboardLayout("Blueprints | Project Platform", userName, slug, "file-code-2", "Blueprints") {
 		@DashboardBlueprintsContent()
 	}
 }
@@ -72,7 +72,7 @@ templ DashboardBlueprintsContent() {
 
 // ── ENVIRONMENT GROUPS ────────────────────────────────────────────────────────
 templ DashboardEnvGroupsPage(userName string, slug string) {
-	@components.DashboardLayout("Environment Groups | Machine Name", userName, slug, "layers-2", "Environment Groups") {
+	@components.DashboardLayout("Environment Groups | Project Platform", userName, slug, "layers-2", "Environment Groups") {
 		@DashboardEnvGroupsContent()
 	}
 }
@@ -83,7 +83,7 @@ templ DashboardEnvGroupsContent() {
 
 // ── OBSERVABILITY ─────────────────────────────────────────────────────────────
 templ DashboardObservabilityPage(userName string, slug string) {
-	@components.DashboardLayout("Observability | Machine Name", userName, slug, "activity", "Observability") {
+	@components.DashboardLayout("Observability | Project Platform", userName, slug, "activity", "Observability") {
 		@DashboardObservabilityContent()
 	}
 }
@@ -94,7 +94,7 @@ templ DashboardObservabilityContent() {
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 templ DashboardNotificationsPage(userName string, slug string) {
-	@components.DashboardLayout("Notifications | Machine Name", userName, slug, "bell", "Notifications") {
+	@components.DashboardLayout("Notifications | Project Platform", userName, slug, "bell", "Notifications") {
 		@DashboardNotificationsContent()
 	}
 }
@@ -105,7 +105,7 @@ templ DashboardNotificationsContent() {
 
 // ── PRIVATE LINKS ─────────────────────────────────────────────────────────────
 templ DashboardPrivateLinksPage(userName string, slug string) {
-	@components.DashboardLayout("Private Links | Machine Name", userName, slug, "lock", "Private Links") {
+	@components.DashboardLayout("Private Links | Project Platform", userName, slug, "lock", "Private Links") {
 		@DashboardPrivateLinksContent()
 	}
 }
@@ -116,7 +116,7 @@ templ DashboardPrivateLinksContent() {
 
 // ── SERVICES ─────────────────────────────────────────────────────────────────
 templ DashboardServicesPage(userName string, slug string) {
-	@components.DashboardLayout("Services | Machine Name", userName, slug, "box", "Services") {
+	@components.DashboardLayout("Services | Project Platform", userName, slug, "box", "Services") {
 		@DashboardServicesContent()
 	}
 }
@@ -150,7 +150,7 @@ templ DashboardServicesContent() {
 
 // ── DEPLOYMENTS ──────────────────────────────────────────────────────────────
 templ DashboardDeploymentsPage(userName string, slug string) {
-	@components.DashboardLayout("Deployments | Machine Name", userName, slug, "rocket", "Deployments") {
+	@components.DashboardLayout("Deployments | Project Platform", userName, slug, "rocket", "Deployments") {
 		@DashboardDeploymentsContent()
 	}
 }
@@ -224,7 +224,7 @@ templ DashboardDeploymentsContent() {
 
 // ── LOGS ─────────────────────────────────────────────────────────────────────
 templ DashboardLogsPage(userName string, slug string) {
-	@components.DashboardLayout("Logs | Machine Name", userName, slug, "scroll-text", "Logs") {
+	@components.DashboardLayout("Logs | Project Platform", userName, slug, "scroll-text", "Logs") {
 		@DashboardLogsContent()
 	}
 }
@@ -235,7 +235,7 @@ templ DashboardLogsContent() {
 
 // ── SECRETS ──────────────────────────────────────────────────────────────────
 templ DashboardSecretsPage(userName string, slug string) {
-	@components.DashboardLayout("Secrets | Machine Name", userName, slug, "key", "Secrets") {
+	@components.DashboardLayout("Secrets | Project Platform", userName, slug, "key", "Secrets") {
 		@DashboardSecretsContent()
 	}
 }
@@ -246,7 +246,7 @@ templ DashboardSecretsContent() {
 
 // ── DOMAINS ──────────────────────────────────────────────────────────────────
 templ DashboardDomainsPage(userName string, slug string) {
-	@components.DashboardLayout("Domains | Machine Name", userName, slug, "globe", "Domains") {
+	@components.DashboardLayout("Domains | Project Platform", userName, slug, "globe", "Domains") {
 		@DashboardDomainsContent()
 	}
 }
@@ -257,7 +257,7 @@ templ DashboardDomainsContent() {
 
 // ── WEBHOOKS ─────────────────────────────────────────────────────────────────
 templ DashboardWebhooksPage(userName string, slug string) {
-	@components.DashboardLayout("Webhooks | Machine Name", userName, slug, "webhook", "Webhooks") {
+	@components.DashboardLayout("Webhooks | Project Platform", userName, slug, "webhook", "Webhooks") {
 		@DashboardWebhooksContent()
 	}
 }
@@ -268,7 +268,7 @@ templ DashboardWebhooksContent() {
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 templ DashboardSettingsPage(userName string, slug string) {
-	@components.DashboardLayout("Settings | Machine Name", userName, slug, "settings", "Settings") {
+	@components.DashboardLayout("Settings | Project Platform", userName, slug, "settings", "Settings") {
 		@DashboardSettingsContent()
 	}
 }

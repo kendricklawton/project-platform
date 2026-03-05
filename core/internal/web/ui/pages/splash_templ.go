@@ -49,7 +49,7 @@ func SplashPage(status string, userName string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.Layout("Machine Name | The cloud for compiled languages", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.Layout("Project Platform | The cloud for compiled languages", userName).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

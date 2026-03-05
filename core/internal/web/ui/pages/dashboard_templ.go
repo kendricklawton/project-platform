@@ -63,7 +63,7 @@ func DashboardPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Projects | Machine Name", userName, slug, "layout-grid", "Projects").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Projects | Project Platform", userName, slug, "layout-grid", "Projects").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -192,7 +192,7 @@ func DashboardBlueprintsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Blueprints | Machine Name", userName, slug, "file-code-2", "Blueprints").Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Blueprints | Project Platform", userName, slug, "file-code-2", "Blueprints").Render(templ.WithChildren(ctx, templ_7745c5c3_Var9), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -269,7 +269,7 @@ func DashboardEnvGroupsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Environment Groups | Machine Name", userName, slug, "layers-2", "Environment Groups").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Environment Groups | Project Platform", userName, slug, "layers-2", "Environment Groups").Render(templ.WithChildren(ctx, templ_7745c5c3_Var12), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -346,7 +346,7 @@ func DashboardObservabilityPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Observability | Machine Name", userName, slug, "activity", "Observability").Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Observability | Project Platform", userName, slug, "activity", "Observability").Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -423,7 +423,7 @@ func DashboardNotificationsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Notifications | Machine Name", userName, slug, "bell", "Notifications").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Notifications | Project Platform", userName, slug, "bell", "Notifications").Render(templ.WithChildren(ctx, templ_7745c5c3_Var18), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -500,7 +500,7 @@ func DashboardPrivateLinksPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Private Links | Machine Name", userName, slug, "lock", "Private Links").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Private Links | Project Platform", userName, slug, "lock", "Private Links").Render(templ.WithChildren(ctx, templ_7745c5c3_Var21), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -577,7 +577,7 @@ func DashboardServicesPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Services | Machine Name", userName, slug, "box", "Services").Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Services | Project Platform", userName, slug, "box", "Services").Render(templ.WithChildren(ctx, templ_7745c5c3_Var24), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -669,7 +669,7 @@ func DashboardDeploymentsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Deployments | Machine Name", userName, slug, "rocket", "Deployments").Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Deployments | Project Platform", userName, slug, "rocket", "Deployments").Render(templ.WithChildren(ctx, templ_7745c5c3_Var27), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -761,7 +761,7 @@ func DashboardLogsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Logs | Machine Name", userName, slug, "scroll-text", "Logs").Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Logs | Project Platform", userName, slug, "scroll-text", "Logs").Render(templ.WithChildren(ctx, templ_7745c5c3_Var30), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -838,7 +838,7 @@ func DashboardSecretsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Secrets | Machine Name", userName, slug, "key", "Secrets").Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Secrets | Project Platform", userName, slug, "key", "Secrets").Render(templ.WithChildren(ctx, templ_7745c5c3_Var33), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -915,7 +915,7 @@ func DashboardDomainsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Domains | Machine Name", userName, slug, "globe", "Domains").Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Domains | Project Platform", userName, slug, "globe", "Domains").Render(templ.WithChildren(ctx, templ_7745c5c3_Var36), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -992,7 +992,7 @@ func DashboardWebhooksPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Webhooks | Machine Name", userName, slug, "webhook", "Webhooks").Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Webhooks | Project Platform", userName, slug, "webhook", "Webhooks").Render(templ.WithChildren(ctx, templ_7745c5c3_Var39), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1069,7 +1069,7 @@ func DashboardSettingsPage(userName string, slug string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = components.DashboardLayout("Settings | Machine Name", userName, slug, "settings", "Settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = components.DashboardLayout("Settings | Project Platform", userName, slug, "settings", "Settings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var42), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

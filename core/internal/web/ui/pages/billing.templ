@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ DashboardBillingPage(userName string, slug string) {
-	@components.DashboardLayout("Billing | Machine Name", userName, slug, "credit-card", "Billing") {
+	@components.DashboardLayout("Billing | Project Platform", userName, slug, "credit-card", "Billing") {
 		@DashboardBillingContent(slug)
 	}
 }
@@ -29,23 +29,23 @@ templ DashboardBillingContent(slug string) {
 			// ── TOC sidebar ──────────────────────────────────────────────────
 			<div class="hidden xl:block shrink-0">
 				<div class="sticky top-6">
-				<nav
-					class="relative border-l border-zinc-200 dark:border-atom-border"
-					x-data="{ sections: ['plan','payment-method','billing-info','included-usage','unbilled-charges','credit-balance','invoice-history'] }"
-				>
-					// Active indicator
-					<div
-						class="absolute -left-px w-px h-9 bg-zinc-900 dark:bg-white transition-transform duration-200 ease-out"
-						:style="`transform: translateY(${sections.indexOf(activeSection) * 2.25}rem)`"
-					></div>
-					@billingTocItem("plan", "Plan")
-					@billingTocItem("payment-method", "Payment Method")
-					@billingTocItem("billing-info", "Billing Information")
-					@billingTocItem("included-usage", "Included Usage")
-					@billingTocItem("unbilled-charges", "Unbilled Charges")
-					@billingTocItem("credit-balance", "Credit Balance")
-					@billingTocItem("invoice-history", "Invoice History")
-				</nav>
+					<nav
+						class="relative border-l border-zinc-200 dark:border-atom-border"
+						x-data="{ sections: ['plan','payment-method','billing-info','included-usage','unbilled-charges','credit-balance','invoice-history'] }"
+					>
+						// Active indicator
+						<div
+							class="absolute -left-px w-px h-9 bg-zinc-900 dark:bg-white transition-transform duration-200 ease-out"
+							:style="`transform: translateY(${sections.indexOf(activeSection) * 2.25}rem)`"
+						></div>
+						@billingTocItem("plan", "Plan")
+						@billingTocItem("payment-method", "Payment Method")
+						@billingTocItem("billing-info", "Billing Information")
+						@billingTocItem("included-usage", "Included Usage")
+						@billingTocItem("unbilled-charges", "Unbilled Charges")
+						@billingTocItem("credit-balance", "Credit Balance")
+						@billingTocItem("invoice-history", "Invoice History")
+					</nav>
 				</div>
 			</div>
 			// ── Main content ─────────────────────────────────────────────────

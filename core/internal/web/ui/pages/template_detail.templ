@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ TemplateDetailPage(userName string, slug string) {
-	@components.Layout("Go Portfolio | Templates | Machine Name", userName) {
+	@components.Layout("Go Portfolio | Templates | Project Platform", userName) {
 		@TemplateDetailContent(userName, slug)
 	}
 }
@@ -89,7 +89,8 @@ templ TemplateDetailContent(userName string, slug string) {
 				<div class="flex flex-col gap-5 px-8 py-12 border-b border-zinc-800">
 					<span class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{ "// hello" }</span>
 					<h2 class="text-4xl font-black text-white uppercase tracking-tight leading-tight">
-						Go Developer.<br/>
+						Go Developer.
+						<br/>
 						<span class="text-zinc-500">Systems Thinker.</span>
 					</h2>
 					<p class="text-sm text-zinc-400 font-mono max-w-md leading-relaxed">Building fast, reliable systems with Go. Open source contributor. Infrastructure nerd.</p>

@@ -3,7 +3,7 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ NewWorkspacePage(userName string, slug string, gated bool) {
-	@components.DashboardLayout("New Workspace | Machine Name", userName, slug, "plus-circle", "New Workspace") {
+	@components.DashboardLayout("New Workspace | Project Platform", userName, slug, "plus-circle", "New Workspace") {
 		@NewWorkspaceContent(slug, gated, "")
 	}
 }
@@ -36,7 +36,7 @@ templ newWorkspaceGate(slug string) {
 				<span class="text-[10px] font-mono text-zinc-400 dark:text-atom-muted uppercase tracking-widest">Current</span>
 				<span class="text-[9px] font-bold px-1.5 py-0.5 border border-zinc-200 dark:border-atom-border text-zinc-500 dark:text-atom-muted uppercase tracking-wider">Free</span>
 			</div>
-			<div class="text-2xl font-black text-zinc-900 dark:text-white">$0<span class="text-xs font-mono text-zinc-400 dark:text-atom-muted"> / mo</span></div>
+			<div class="text-2xl font-black text-zinc-900 dark:text-white">$0<span class="text-xs font-mono text-zinc-400 dark:text-atom-muted">/ mo</span></div>
 			<ul class="flex flex-col gap-2 text-xs text-zinc-500 dark:text-atom-muted">
 				<li class="flex items-center gap-2">
 					<i data-lucide="check" width="11" height="11" class="text-zinc-400 shrink-0"></i>
@@ -70,7 +70,7 @@ templ newWorkspaceGate(slug string) {
 				<span class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Upgrade</span>
 				<span class="text-[9px] font-bold px-1.5 py-0.5 border border-zinc-700 text-zinc-400 uppercase tracking-wider">Pro</span>
 			</div>
-			<div class="relative text-2xl font-black text-white">$20<span class="text-xs font-mono text-zinc-500"> / member / mo</span></div>
+			<div class="relative text-2xl font-black text-white">$20<span class="text-xs font-mono text-zinc-500">/ member / mo</span></div>
 			<ul class="relative flex flex-col gap-2 text-xs text-zinc-400">
 				<li class="flex items-center gap-2">
 					<i data-lucide="check" width="11" height="11" class="text-zinc-500 shrink-0"></i>

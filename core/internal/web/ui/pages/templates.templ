@@ -3,13 +3,13 @@ package pages
 import "github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 
 templ TemplatesPage(userName string) {
-	@components.Layout("Templates | Machine Name", userName) {
+	@components.Layout("Templates | Project Platform", userName) {
 		@TemplatesContent(userName)
 	}
 }
 
 templ TemplatesContent(userName string) {
-	<title>Templates | Machine Name</title>
+	<title>Templates | Project Platform</title>
 	<div class="flex flex-col gap-24 py-12">
 		// ── HERO ──────────────────────────────────────────────────────────────
 		<section class="relative z-10 flex flex-col gap-6 max-w-3xl">
