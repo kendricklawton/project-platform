@@ -28,10 +28,6 @@ packer {
       version = ">= 1.0.0"
       source  = "github.com/hetznercloud/hcloud"
     }
-    digitalocean = {
-      version = ">= 1.0.0"
-      source  = "github.com/digitalocean/digitalocean"
-    }
   }
 }
 
@@ -46,26 +42,15 @@ variable "hcloud_token" {
 }
 
 variable "hcloud_ubuntu_version" {
-  type    = string
+  type = string
 }
 
 variable "hcloud_nat_type" {
-  type    = string
+  type = string
 }
 
 variable "hcloud_k8s_type" {
-  type    = string
-}
-
-variable "do_api_token" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "do_k8s_size" {
-  type    = string
-  default = "s-2vcpu-4gb"
+  type = string
 }
 
 # LOCALS
@@ -73,66 +58,43 @@ locals {
   timestamp = formatdate("YYMMDD", timestamp())
 }
 
-# SOURCES: DO K8S NODE
-source "digitalocean" "k8s_nyc3" {
-  api_token    = var.do_api_token
-  image        = "ubuntu-24-04-x64"
-  region       = "nyc3"
-  size         = var.do_k8s_size
-  ssh_username = "root"
-  snapshot_name = "nyc3-k8s-node-ubuntu-amd64-${local.timestamp}"
-  snapshot_regions = ["nyc3"]
-  tags = ["role:k8s-node", "location:nyc3"]
-}
-
-source "digitalocean" "k8s_sfo3" {
-  api_token    = var.do_api_token
-  image        = "ubuntu-24-04-x64"
-  region       = "sfo3"
-  size         = var.do_k8s_size
-  ssh_username = "root"
-  snapshot_name = "sfo3-k8s-node-ubuntu-amd64-${local.timestamp}"
-  snapshot_regions = ["sfo3"]
-  tags = ["role:k8s-node", "location:sfo3"]
-}
-
 # SOURCES: NAT GATEWAY
 source "hcloud" "nat_ash" {
-  token         = var.hcloud_token
-  image         = var.hcloud_ubuntu_version
-  location      = "ash"
-  server_type   = var.hcloud_nat_type
-  ssh_username  = "root"
-  snapshot_name = "ash-nat-gateway-ubuntu-amd64-${local.timestamp}"
+  token           = var.hcloud_token
+  image           = var.hcloud_ubuntu_version
+  location        = "ash"
+  server_type     = var.hcloud_nat_type
+  ssh_username    = "root"
+  snapshot_name   = "ash-nat-gateway-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
-    role    = "nat-gateway"
-    location  = "ash"
-    version = local.timestamp
+    role     = "nat-gateway"
+    location = "ash"
+    version  = local.timestamp
   }
 }
 
 source "hcloud" "nat_hil" {
-  token         = var.hcloud_token
-  image         = var.hcloud_ubuntu_version
-  location      = "hil"
-  server_type   = var.hcloud_nat_type
-  ssh_username  = "root"
-  snapshot_name = "hil-nat-gateway-ubuntu-amd64-${local.timestamp}"
+  token           = var.hcloud_token
+  image           = var.hcloud_ubuntu_version
+  location        = "hil"
+  server_type     = var.hcloud_nat_type
+  ssh_username    = "root"
+  snapshot_name   = "hil-nat-gateway-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
-    role    = "nat-gateway"
-    location  = "hil"
-    version = local.timestamp
+    role     = "nat-gateway"
+    location = "hil"
+    version  = local.timestamp
   }
 }
 
 # SOURCES: K8S NODE
 source "hcloud" "k8s_ash" {
-  token         = var.hcloud_token
-  image         = var.hcloud_ubuntu_version
-  location      = "ash"
-  server_type   = var.hcloud_k8s_type
-  ssh_username  = "root"
-  snapshot_name = "ash-k8s-node-ubuntu-amd64-${local.timestamp}"
+  token           = var.hcloud_token
+  image           = var.hcloud_ubuntu_version
+  location        = "ash"
+  server_type     = var.hcloud_k8s_type
+  ssh_username    = "root"
+  snapshot_name   = "ash-k8s-node-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
     role     = "k8s-node"
     location = "ash"
@@ -141,19 +103,18 @@ source "hcloud" "k8s_ash" {
 }
 
 source "hcloud" "k8s_hil" {
-  token         = var.hcloud_token
-  image         = var.hcloud_ubuntu_version
-  location      = "hil"
-  server_type   = var.hcloud_k8s_type
-  ssh_username  = "root"
-  snapshot_name = "hil-k8s-node-ubuntu-amd64-${local.timestamp}"
+  token           = var.hcloud_token
+  image           = var.hcloud_ubuntu_version
+  location        = "hil"
+  server_type     = var.hcloud_k8s_type
+  ssh_username    = "root"
+  snapshot_name   = "hil-k8s-node-ubuntu-amd64-${local.timestamp}"
   snapshot_labels = {
     role     = "k8s-node"
     location = "hil"
     version  = local.timestamp
   }
 }
-
 
 # BUILD: NAT GATEWAY
 build {
@@ -171,11 +132,8 @@ build {
   provisioner "shell" {
     environment_vars = ["DEBIAN_FRONTEND=noninteractive"]
     inline = [
-      # Pre-seed iptables-persistent to avoid interactive prompts
       "echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections",
       "echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections",
-
-      # Update and Install Packages (Added unattended-upgrades)
       "apt-get update -y",
       "apt-get upgrade -y",
       "apt-get install -y iptables-persistent curl jq fail2ban unattended-upgrades",
@@ -185,11 +143,8 @@ build {
   # --- SECURITY HARDENING ---
   provisioner "shell" {
     inline = [
-      # Enable fail2ban and automatic security patches
       "systemctl enable fail2ban",
       "systemctl enable unattended-upgrades",
-
-      # Lock down SSH (Disallow passwords and root login since we use Tailscale SSH)
       "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config",
       "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
       "systemctl restart ssh || systemctl restart sshd"
@@ -200,27 +155,18 @@ build {
   provisioner "shell" {
     inline = [
       "cat << 'EOF' > /etc/sysctl.d/99-nat-tuning.conf",
-      "# Enable IP Forwarding",
       "net.ipv4.ip_forward=1",
-      "",
-      "# TCP BBR Congestion Control for better throughput",
       "net.core.default_qdisc=fq",
       "net.ipv4.tcp_congestion_control=bbr",
-      "",
-      "# Increase connection tracking table size (Prevent 'table full, dropping packet')",
       "net.netfilter.nf_conntrack_max=1048576",
-      "",
-      "# Widen the ephemeral port range for NAT translations",
       "net.ipv4.ip_local_port_range=1024 65535",
-      "",
-      "# Fast recycling of TIME_WAIT sockets",
       "net.ipv4.tcp_tw_reuse=1",
       "EOF",
       "sysctl --system"
     ]
   }
 
-  # --- FIREWALL RULES (Base rules without dynamic MASQUERADE) ---
+  # --- FIREWALL RULES ---
   provisioner "shell" {
     inline = [
       "cat << 'EOF' > /etc/iptables/rules.v4",
@@ -249,204 +195,27 @@ build {
   # --- TAILSCALE ---
   provisioner "shell" {
     inline = [
-      # Install Tailscale binaries
       "curl -fsSL https://tailscale.com/install.sh | sh",
-      # Ensure the service is enabled to start on boot
       "systemctl enable tailscaled"
     ]
   }
 
   # --- CLEANUP ---
-    provisioner "shell" {
-      inline = [
-        "apt-get clean",
-        "rm -rf /var/lib/apt/lists/*",
-        "rm -f /etc/netplan/50-cloud-init.yaml",
-        "cloud-init clean --logs --seed",
-        "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
-      ]
-    }
+  provisioner "shell" {
+    inline = [
+      "apt-get clean",
+      "rm -rf /var/lib/apt/lists/*",
+      "rm -f /etc/netplan/50-cloud-init.yaml",
+      "cloud-init clean --logs --seed",
+      "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
+    ]
+  }
 }
 
 # BUILD: K8S NODE (vanilla Kubernetes via kubeadm)
 build {
   name    = "k8s"
   sources = ["source.hcloud.k8s_ash", "source.hcloud.k8s_hil"]
-
-  provisioner "shell" {
-    inline = [
-      "echo 'Waiting for cloud-init to finish...'",
-      "/usr/bin/cloud-init status --wait"
-    ]
-  }
-
-  # --- PACKAGES ---
-  provisioner "shell" {
-    inline = [
-      "export DEBIAN_FRONTEND=noninteractive",
-      "apt-get update && apt-get upgrade -y",
-      "apt-get install -y ca-certificates curl wget gpg apt-transport-https python3 wireguard logrotate open-iscsi nfs-common cryptsetup systemd-timesyncd fping jq",
-      "systemctl enable systemd-timesyncd",
-      "timedatectl set-ntp true"
-    ]
-  }
-
-  # --- SECURITY HARDENING (Enforce Tailscale SSH Only) ---
-  provisioner "shell" {
-    inline = [
-      # Disable standard SSH password and root login
-      "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config",
-      "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config",
-      "systemctl restart ssh || systemctl restart sshd"
-    ]
-  }
-
-  # --- CONTAINERD ---
-  provisioner "shell" {
-    inline = [
-      "export DEBIAN_FRONTEND=noninteractive",
-      "apt-get install -y containerd",
-      # Generate default config and enable systemd cgroup driver
-      "mkdir -p /etc/containerd",
-      "containerd config default > /etc/containerd/config.toml",
-      "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml",
-      "systemctl enable containerd"
-    ]
-  }
-
-  # --- GVISOR ---
-  provisioner "shell" {
-    inline = [
-      "ARCH=$(uname -m)",
-      "URL=https://storage.googleapis.com/gvisor/releases/release/latest/$${ARCH}",
-      "wget $${URL}/runsc $${URL}/runsc.sha512",
-      "sha512sum -c runsc.sha512",
-      "rm -f runsc.sha512",
-      "chmod a+rx runsc",
-      "mv runsc /usr/local/bin",
-      "ln -sf /usr/local/bin/runsc /usr/bin/runsc",
-      "wget $${URL}/containerd-shim-runsc-v1 $${URL}/containerd-shim-runsc-v1.sha512",
-      "sha512sum -c containerd-shim-runsc-v1.sha512",
-      "rm -f containerd-shim-runsc-v1.sha512",
-      "chmod a+rx containerd-shim-runsc-v1",
-      "mv containerd-shim-runsc-v1 /usr/local/bin",
-      "ln -sf /usr/local/bin/containerd-shim-runsc-v1 /usr/bin/containerd-shim-runsc-v1",
-      # Register gVisor runtime with containerd
-      "cat >> /etc/containerd/config.toml << 'EOF'",
-      "",
-      "[plugins.\"io.containerd.grpc.v1.cri\".containerd.runtimes.runsc]",
-      "  runtime_type = \"io.containerd.runsc.v1\"",
-      "EOF"
-    ]
-  }
-
-  # --- KUBERNETES (kubeadm / kubelet / kubectl) ---
-  provisioner "shell" {
-    inline = [
-      # Extract major.minor for the apt repo path (e.g. 1.32 from v1.32.3)
-      "K8S_VERSION='${var.kubernetes_version}'",
-      "K8S_MINOR=$(echo $K8S_VERSION | sed 's/^v//' | cut -d. -f1-2)",
-      # Add Kubernetes apt repo
-      "curl -fsSL https://pkgs.k8s.io/core:/stable:/v$K8S_MINOR/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg",
-      "echo \"deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$K8S_MINOR/deb/ /\" > /etc/apt/sources.list.d/kubernetes.list",
-      "apt-get update",
-      # Install pinned version — version string format: 1.32.3-1.1 (without leading v)
-      "PKG_VERSION=$(echo $K8S_VERSION | sed 's/^v//')",
-      "apt-get install -y kubelet=$${PKG_VERSION}-* kubeadm=$${PKG_VERSION}-* kubectl=$${PKG_VERSION}-*",
-      # Hold to prevent unintended upgrades
-      "apt-mark hold kubelet kubeadm kubectl"
-    ]
-  }
-
-  # --- CRICTL (required by kubeadm for pre-flight checks) ---
-  provisioner "shell" {
-    inline = [
-      "K8S_VERSION='${var.kubernetes_version}'",
-      "CRICTL_VERSION=$(echo $K8S_VERSION | sed 's/^v//')",
-      "ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')",
-      "wget -q https://github.com/kubernetes-sigs/cri-tools/releases/download/v$${CRICTL_VERSION}/crictl-v$${CRICTL_VERSION}-linux-$${ARCH}.tar.gz",
-      "tar -xzf crictl-v$${CRICTL_VERSION}-linux-$${ARCH}.tar.gz -C /usr/local/bin",
-      "rm -f crictl-v$${CRICTL_VERSION}-linux-$${ARCH}.tar.gz",
-      "chmod +x /usr/local/bin/crictl",
-      # Point crictl at containerd socket
-      "printf 'runtime-endpoint: unix:///run/containerd/containerd.sock\\nimage-endpoint: unix:///run/containerd/containerd.sock\\n' > /etc/crictl.yaml"
-    ]
-  }
-
-  # --- HELM ---
-  provisioner "shell" {
-    inline = [
-      "curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
-    ]
-  }
-
-  # --- TAILSCALE ---
-  provisioner "shell" {
-    inline = [
-      "curl -fsSL https://tailscale.com/install.sh | sh",
-      "systemctl enable tailscaled",
-      "rm -f /var/lib/tailscale/tailscaled.state"
-    ]
-  }
-
-  # --- KERNEL TUNING ---
-  provisioner "shell" {
-    inline = [
-      "modprobe br_netfilter",
-      "printf 'br_netfilter\n' > /etc/modules-load.d/k8s.conf",
-      "echo 'net.ipv4.ip_forward = 1'                    >  /etc/sysctl.d/99-k8s.conf",
-      "echo 'net.ipv6.conf.all.forwarding = 1'           >> /etc/sysctl.d/99-k8s.conf",
-      "echo 'net.bridge.bridge-nf-call-iptables = 1'     >> /etc/sysctl.d/99-k8s.conf",
-      "echo 'net.bridge.bridge-nf-call-ip6tables = 1'    >> /etc/sysctl.d/99-k8s.conf",
-      "echo 'fs.inotify.max_user_instances = 8192'       >> /etc/sysctl.d/99-k8s.conf",
-      "echo 'fs.inotify.max_user_watches = 524288'       >> /etc/sysctl.d/99-k8s.conf",
-      "sysctl --system"
-    ]
-  }
-
-  # --- TRIVY SECURITY SCAN ---
-  provisioner "shell" {
-    inline = [
-      "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -",
-      "echo \"deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main\" | tee /etc/apt/sources.list.d/trivy.list",
-      "apt-get update && apt-get install -y trivy",
-      "trivy filesystem --exit-code 1 --severity CRITICAL --ignore-unfixed /"
-    ]
-  }
-
-  # --- LOG ROTATION ---
-  provisioner "shell" {
-    inline = [
-      "echo '/var/log/tailscale-join.log {'           >  /etc/logrotate.d/k8s-bootstrap",
-      "echo '    size 10M'                            >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '    rotate 5'                            >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '    compress'                            >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '    missingok'                           >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '    notifempty'                          >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '    copytruncate'                        >> /etc/logrotate.d/k8s-bootstrap",
-      "echo '}'                                       >> /etc/logrotate.d/k8s-bootstrap",
-      "sed -i 's/#SystemMaxUse=/SystemMaxUse=1G/'     /etc/systemd/journald.conf",
-      "sed -i 's/#SystemKeepFree=/SystemKeepFree=1G/' /etc/systemd/journald.conf"
-    ]
-  }
-
-
-  # --- CLEANUP ---
-    provisioner "shell" {
-      inline = [
-        "apt-get clean",
-        "rm -rf /var/lib/apt/lists/*",
-        "rm -f /etc/netplan/50-cloud-init.yaml",
-        "cloud-init clean --logs --seed",
-        "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
-      ]
-    }
-}
-
-# BUILD: DO K8S NODE — identical software stack, DigitalOcean source
-build {
-  name    = "do-k8s"
-  sources = ["source.digitalocean.k8s_nyc3", "source.digitalocean.k8s_sfo3"]
 
   provisioner "shell" {
     inline = [
@@ -508,7 +277,7 @@ build {
     ]
   }
 
-  # --- KUBERNETES (kubeadm / kubelet / kubectl) ---
+  # --- KUBERNETES ---
   provisioner "shell" {
     inline = [
       "K8S_VERSION='${var.kubernetes_version}'",
@@ -598,6 +367,7 @@ build {
     inline = [
       "apt-get clean",
       "rm -rf /var/lib/apt/lists/*",
+      "rm -f /etc/netplan/50-cloud-init.yaml",
       "cloud-init clean --logs --seed",
       "truncate -s 0 /etc/machine-id /var/lib/dbus/machine-id /etc/hostname"
     ]

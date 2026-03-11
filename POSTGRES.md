@@ -1,6 +1,6 @@
 # PostgreSQL
 
-Managed by CloudNativePG (CNPG) operator inside K3s. HA in production (1 primary + 2 replicas). Single instance in dev.
+Managed by CloudNativePG (CNPG) operator inside kubernetes. HA in production (1 primary + 2 replicas). Single instance in dev.
 
 ## Connection
 
