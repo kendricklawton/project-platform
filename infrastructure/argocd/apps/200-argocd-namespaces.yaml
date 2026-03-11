@@ -1,8 +1,10 @@
 # -----------------------------------------------------------------------------
-# TENANT & PLATFORM WORKLOADS
+# PLATFORM WORKLOADS
 # -----------------------------------------------------------------------------
 
-# Primary Tenant Namespace (For user-deployed Go/Rust/Zig APIs)
+# Primary app namespace — user-deployed workloads run here
+# baseline enforce: blocks privileged pods and host mounts
+# restricted warn: surfaces violations without hard-blocking during migration
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -11,12 +13,11 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
   labels:
     platform.io/managed-by: argocd
-    # Native Kubernetes security: Block privileged pods and host mounts
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/warn: restricted
 
 ---
-# Core Platform Backend (Internal Registry, CNPG Databases)
+# Core platform backend — registry, DB operator, internal services
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -26,14 +27,15 @@ metadata:
   labels:
     platform.io/managed-by: argocd
     pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
 
 
 # -----------------------------------------------------------------------------
-# OBSERVABILITY & SECURITY METADATA
+# OBSERVABILITY
 # -----------------------------------------------------------------------------
 
 ---
-# Logging and Metrics (Loki, Fluent Bit, VictoriaMetrics, Grafana)
+# Loki, Fluent Bit, VictoriaMetrics, Grafana
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -42,74 +44,15 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
   labels:
     platform.io/managed-by: argocd
-
----
-# Admission Controller (Kyverno)
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kyverno
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
-
----
-# eBPF Runtime Security (KubeArmor)
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kubearmor
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
+    pod-security.kubernetes.io/enforce: baseline
 
 
 # -----------------------------------------------------------------------------
-# SERVERLESS & EVENTING
+# OPERATORS
 # -----------------------------------------------------------------------------
 
 ---
-# Knative Serving (Scale-to-zero compute engine)
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: knative-serving
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
-
----
-# Knative Eventing
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: knative-eventing
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
-
----
-# Eventing Backbone (NATS JetStream)
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: nats
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
-
-
-# -----------------------------------------------------------------------------
-# OPERATORS & BUILD ENGINES
-# -----------------------------------------------------------------------------
-
----
-# PostgreSQL Database Operator
+# CloudNativePG — PostgreSQL operator
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -118,16 +61,4 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
   labels:
     platform.io/managed-by: argocd
-
----
-# Polyglot Build Engine (kpack)
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kpack
-  annotations:
-    argocd.argoproj.io/sync-wave: "0"
-  labels:
-    platform.io/managed-by: argocd
-    # kpack is designed to build containers securely without root
     pod-security.kubernetes.io/enforce: baseline

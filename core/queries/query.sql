@@ -17,12 +17,6 @@ SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL;
 -- name: GetUserByEmail :one
 SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL;
 
--- name: UpdateUserTier :one
-UPDATE users SET tier = $2 WHERE id = $1 RETURNING *;
-
--- name: UpdateUserStripeCustomerID :one
-UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING *;
-
 -- name: UpdateUserProfile :one
 UPDATE users SET name = $2, avatar_url = $3 WHERE id = $1 RETURNING *;
 
@@ -455,22 +449,3 @@ AND al.created_at < $4
 ORDER BY al.created_at DESC
 LIMIT $5;
 
--- ============================================================================
--- USAGE / BILLING
--- ============================================================================
-
--- name: RecordUsage :exec
-INSERT INTO usage_records (id, workspace_id, metric, quantity, period_start, period_end)
-VALUES ($1, $2, $3, $4, $5, $6);
-
--- name: GetWorkspaceUsageSummary :many
-SELECT metric, SUM(quantity) AS total
-FROM usage_records
-WHERE workspace_id = $1 AND period_start >= $2 AND period_end <= $3
-GROUP BY metric;
-
--- name: GetWorkspaceUsageDetail :many
-SELECT * FROM usage_records
-WHERE workspace_id = $1 AND metric = $2 AND period_start >= $3
-ORDER BY period_start DESC
-LIMIT $4;

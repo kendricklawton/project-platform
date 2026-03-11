@@ -37,15 +37,12 @@ func LoadServer() (*ServerConfig, error) {
 
 // WEB BFF CONFIGURATION (For platform-web)
 type WebConfig struct {
-	Port                 int
-	Debug                bool
-	APIURL               string
-	WebBaseURL           string
-	InternalSecret       string
-	WorkOSAPIKey         string
-	WorkOSClientID       string
-	WorkOSRedirectURI    string
-	WorkOSCLIRedirectURI string
+	Port              int
+	Debug             bool
+	APIURL            string
+	WebBaseURL        string
+	InternalSecret    string
+	AdminPasswordHash string
 }
 
 func LoadWeb() (*WebConfig, error) {
@@ -65,36 +62,9 @@ func LoadWeb() (*WebConfig, error) {
 	if cfg.InternalSecret, err = getEnvRequired("PLATFORM_INTERNAL_SECRET"); err != nil {
 		return nil, err
 	}
-	if cfg.WorkOSAPIKey, err = getEnvRequired("WORKOS_API_KEY"); err != nil {
+	if cfg.AdminPasswordHash, err = getEnvRequired("PLATFORM_ADMIN_PASSWORD_HASH"); err != nil {
 		return nil, err
 	}
-	if cfg.WorkOSClientID, err = getEnvRequired("WORKOS_CLIENT_ID"); err != nil {
-		return nil, err
-	}
-
-	cfg.WorkOSRedirectURI = getEnv("WORKOS_WEB_REDIRECT_URI", "http://localhost:3000/auth/callback")
-	cfg.WorkOSCLIRedirectURI = getEnv("WORKOS_CLI_REDIRECT_URI", "http://localhost:3000/auth/cli/callback")
-
-	return cfg, nil
-}
-
-// CLI CONFIGURATION (For platform-cli)
-// CLIConfig holds the state for the developer's local CLI environment.
-// The `mapstructure` tags allow Viper to easily unmarshal JSON/Env vars into this struct.
-type CLIConfig struct {
-	APIURL string `mapstructure:"api_url" json:"api_url"`
-	Token  string `mapstructure:"token" json:"token"`
-}
-
-// LoadCLI provides a fallback manual loader, but in Cobra/Viper setups,
-// you will typically use `viper.Unmarshal(&cfg)` to populate this struct.
-func LoadCLI() (*CLIConfig, error) {
-	cfg := &CLIConfig{}
-
-	// Default to localhost for local development, but this will be overridden
-	// by viper if `~/.platform/config.json` or `PLATFORM_API_URL` exists.
-	cfg.APIURL = getEnv("PLATFORM_API_URL", "http://localhost:8080")
-	cfg.Token = getEnv("PLATFORM_TOKEN", "")
 
 	return cfg, nil
 }

@@ -8,18 +8,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/components"
 	"github.com/kendricklawton/project-platform/core/internal/web/ui/pages"
-	"github.com/workos/workos-go/v6/pkg/usermanagement"
 )
 
 // Handler is the Backend-For-Frontend (BFF) controller.
 type Handler struct {
-	APIURL               string
-	BaseURL              string
-	InternalSecret       string
-	WorkOSAPIKey         string
-	WorkOSClientID       string
-	WorkOSRedirectURI    string
-	WorkOSCLIRedirectURI string
+	APIURL            string
+	BaseURL           string
+	InternalSecret    string
+	AdminPasswordHash string
 }
 
 // NewHandler creates a new Web Handler with all required dependencies.
@@ -27,19 +23,13 @@ func NewHandler(
 	apiURL string,
 	baseURL string,
 	internalSecret string,
-	workOSAPIKey string,
-	workOSClientID string,
-	workOSRedirectURI string,
-	workOSCLIRedirectURI string,
+	adminPasswordHash string,
 ) *Handler {
 	return &Handler{
-		APIURL:               apiURL,
-		BaseURL:              baseURL,
-		InternalSecret:       internalSecret,
-		WorkOSAPIKey:         workOSAPIKey,
-		WorkOSClientID:       workOSClientID,
-		WorkOSRedirectURI:    workOSRedirectURI,
-		WorkOSCLIRedirectURI: workOSCLIRedirectURI,
+		APIURL:            apiURL,
+		BaseURL:           baseURL,
+		InternalSecret:    internalSecret,
+		AdminPasswordHash: adminPasswordHash,
 	}
 }
 
@@ -269,7 +259,7 @@ func (h *Handler) Account(w http.ResponseWriter, r *http.Request) {
 }
 
 // AccountDelete deletes the authenticated user's account, clears all cookies,
-// revokes the WorkOS session, and redirects to the home page.
+// and redirects to the home page.
 func (h *Handler) AccountDelete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetTokenFromContext(r.Context())
 	if !ok || userID == "" {
@@ -286,14 +276,8 @@ func (h *Handler) AccountDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to delete account", http.StatusInternalServerError)
 		return
 	}
-	usermanagement.SetAPIKey(h.WorkOSAPIKey)
-	if wosUID, err := r.Cookie(workosUserIDCookieName); err == nil && wosUID.Value != "" {
-		if err := usermanagement.DeleteUser(r.Context(), usermanagement.DeleteUserOpts{User: wosUID.Value}); err != nil {
-			log.Printf("AccountDelete: failed to delete WorkOS user %s: %v", wosUID.Value, err)
-		}
-	}
 	past := time.Unix(0, 0)
-	for _, name := range []string{SessionCookieName, nameCookieName, emailCookieName, workosUserIDCookieName, slugCookieName, workosSessionCookieName, stateCookieName} {
+	for _, name := range []string{SessionCookieName, nameCookieName, emailCookieName, slugCookieName, stateCookieName} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    "",

@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
-
 	"github.com/kendricklawton/project-platform/core/internal/api"
 	"github.com/kendricklawton/project-platform/core/internal/config"
 	"github.com/kendricklawton/project-platform/core/internal/db"
@@ -34,7 +31,7 @@ func New(cfg *config.ServerConfig, store db.Store, k8sClient *k8s.Client) *Serve
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpServer := &http.Server{
 		Addr:    addr,
-		Handler: h2c.NewHandler(router, &http2.Server{}),
+		Handler: router,
 	}
 
 	return &Server{

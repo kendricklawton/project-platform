@@ -25,31 +25,27 @@ variable "ssh_key_name" { type = string }
 variable "location" { type = string }     # Hetzner datacenter code: nbg1, fsn1, hel1, ash, hil
 
 # Server Types
-variable "k3s_server_type" { type = string }
-variable "k3s_agent_type" { type = string }
+variable "cp_server_type" { type = string }
+variable "worker_server_type" { type = string }
 variable "nat_gateway_type" { type = string }
 variable "load_balancer_type" { type = string }
 variable "git_repo_url" { type = string }
 
 # Tailscale
 variable "tailscale_auth_nat_key" { sensitive = true }
-variable "tailscale_auth_k3s_server_key" { sensitive = true }
-variable "tailscale_auth_k3s_agent_key" { sensitive = true }
+variable "tailscale_auth_cp_key" { sensitive = true }
+variable "tailscale_auth_worker_key" { sensitive = true }
 
-# S3 Backup Bucket
-variable "etcd_s3_access_key" { sensitive = true }
-variable "etcd_s3_secret_key" { sensitive = true }
-variable "etcd_s3_bucket" { type = string }
-variable "etcd_s3_region" { type = string }
-variable "etcd_s3_endpoint" { type = string }
-
-# Manifest Versions
-variable "ccm_version" { type = string }
-variable "csi_version" { type = string }
+# Kubernetes
+variable "kubernetes_version" { type = string }
 variable "cilium_version" { type = string }
-variable "ingress_nginx_version" { type = string }
 variable "argocd_version" { type = string }
 variable "sealed_secrets_version" { type = string }
+
+# Hetzner cloud integration
+variable "ccm_version" { type = string }
+variable "csi_version" { type = string }
+variable "ingress_nginx_version" { type = string }
 variable "hcloud_mtu" {
   type    = number
   default = 1450
@@ -66,35 +62,51 @@ locals {
   prefix = "${var.env}-${var.region}"
 
   # Infrastructure IPs
-  nat_server_ip                = cidrhost("10.0.1.0/24", 2)
-  k3s_api_load_balancer_ip     = cidrhost("10.0.1.0/24", 11)
-  k3s_ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 12)
+  nat_server_ip            = cidrhost("10.0.1.0/24", 2)
+  api_load_balancer_ip     = cidrhost("10.0.1.0/24", 11)
+  ingress_load_balancer_ip = cidrhost("10.0.1.0/24", 12)
 
   # Cluster size per environment
   cluster_config = {
-    dev  = { server_count = 1, agent_count = 1 }
-    prod = { server_count = 3, agent_count = 3 }
+    dev  = { cp_count = 1, worker_count = 1 }
+    prod = { cp_count = 3, worker_count = 3 }
   }
 
   # Sticky name→IP maps for the recycle method
-  server_map = {
-    for i in range(local.cluster_config[var.env].server_count) :
+  cp_map = {
+    for i in range(local.cluster_config[var.env].cp_count) :
     format("${local.prefix}-server-cp-%02d", i + 1) => cidrhost("10.0.1.0/24", i + 21)
   }
 
-  agent_map = {
-    for i in range(local.cluster_config[var.env].agent_count) :
+  worker_map = {
+    for i in range(local.cluster_config[var.env].worker_count) :
     format("${local.prefix}-server-wk-%02d", i + 1) => cidrhost("10.0.1.0/24", i + 31)
   }
 
-  # Split the init server out for cluster-init bootstrap
-  init_server_name = format("${local.prefix}-server-cp-%02d", 1)
-  join_servers     = { for k, v in local.server_map : k => v if k != local.init_server_name }
+  # Split init control plane from join control planes
+  init_cp_name = format("${local.prefix}-server-cp-%02d", 1)
+  join_cps     = { for k, v in local.cp_map : k => v if k != local.init_cp_name }
 
-  manifest_injector_script = join("\n", [
-    for filename, content in module.k3s_manifests.rendered_manifests :
-    "echo '${base64encode(content)}' | base64 -d > /var/lib/rancher/k3s/server/manifests/${filename}"
-  ])
+  # kubeadm bootstrap token: [a-z0-9]{6}.[a-z0-9]{16}
+  kubeadm_token = "${random_string.kubeadm_token_id.result}.${random_string.kubeadm_token_secret.result}"
+}
+
+# --- KUBEADM TOKENS ---
+resource "random_string" "kubeadm_token_id" {
+  length  = 6
+  upper   = false
+  special = false
+}
+
+resource "random_string" "kubeadm_token_secret" {
+  length  = 16
+  upper   = false
+  special = false
+}
+
+# Certificate key for HA control-plane join (32-byte hex)
+resource "random_id" "kubeadm_cert_key" {
+  byte_length = 32
 }
 
 # --- DATA SOURCES ---
@@ -103,8 +115,8 @@ data "hcloud_image" "nat_gateway" {
   most_recent   = true
 }
 
-data "hcloud_image" "k3s_node" {
-  with_selector = "role=k3s-node,location=${var.location}"
+data "hcloud_image" "k8s_node" {
+  with_selector = "role=k8s-node,location=${var.location}"
   most_recent   = true
 }
 
@@ -118,7 +130,7 @@ resource "hcloud_network" "main" {
   ip_range = "10.0.0.0/16"
 }
 
-resource "hcloud_network_subnet" "k3s_nodes" {
+resource "hcloud_network_subnet" "k8s_nodes" {
   network_id   = hcloud_network.main.id
   type         = "cloud"
   network_zone = var.region  # Hetzner network zone — matches var.region (eu-central, us-east, us-west, ap-southeast)
@@ -171,10 +183,10 @@ resource "hcloud_load_balancer" "api" {
 resource "hcloud_load_balancer_network" "api_net" {
   load_balancer_id = hcloud_load_balancer.api.id
   network_id       = hcloud_network.main.id
-  ip               = local.k3s_api_load_balancer_ip
+  ip               = local.api_load_balancer_ip
 }
 
-resource "hcloud_load_balancer_service" "k3s_api" {
+resource "hcloud_load_balancer_service" "k8s_api" {
   load_balancer_id = hcloud_load_balancer.api.id
   protocol         = "tcp"
   listen_port      = 6443
@@ -189,46 +201,15 @@ resource "hcloud_load_balancer" "ingress" {
 
 resource "hcloud_load_balancer_network" "ingress_net" {
   load_balancer_id = hcloud_load_balancer.ingress.id
-  ip               = local.k3s_ingress_load_balancer_ip
+  ip               = local.ingress_load_balancer_ip
   network_id       = hcloud_network.main.id
-}
-
-# --- K3S MODULE & TOKENS ---
-resource "random_password" "k3s_token" {
-  length  = 64
-  special = false
-}
-
-module "k3s_manifests" {
-  source                 = "../../modules/k3s_node"
-  mtu                    = 1450
-  k3s_load_balancer_ip   = local.k3s_api_load_balancer_ip
-  cilium_version         = var.cilium_version
-  ingress_nginx_version  = var.ingress_nginx_version
-  sealed_secrets_version = var.sealed_secrets_version
-  argocd_version         = var.argocd_version
-  git_repo_url           = var.git_repo_url
-
-  # Hetzner-specific manifests: cloud secret, CCM, CSI
-  extra_manifests = {
-    "000-hcloud-secret.yaml" = templatefile("${path.module}/bootstrap/000-hcloud-secret.yaml", {
-      Token   = var.token
-      Network = hcloud_network.main.name
-    })
-    "010-hcloud-ccm.yaml" = templatefile("${path.module}/bootstrap/010-hcloud-ccm.yaml", {
-      CCMVersion = var.ccm_version
-    })
-    "020-hcloud-csi.yaml" = templatefile("${path.module}/bootstrap/020-hcloud-csi.yaml", {
-      CSIVersion = var.csi_version
-    })
-  }
 }
 
 # --- PHASE 1: CONTROL PLANE INIT ---
 resource "hcloud_server" "control_plane_init" {
-  name        = local.init_server_name
-  image       = data.hcloud_image.k3s_node.id
-  server_type = var.k3s_server_type
+  name        = local.init_cp_name
+  image       = data.hcloud_image.k8s_node.id
+  server_type = var.cp_server_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
 
@@ -239,21 +220,28 @@ resource "hcloud_server" "control_plane_init" {
 
   network {
     network_id = hcloud_network.main.id
-    ip         = local.server_map[local.init_server_name]
+    ip         = local.cp_map[local.init_cp_name]
   }
 
   user_data = templatefile("${path.module}/templates/cloud-init-server.yaml", {
-    hostname                      = local.init_server_name
-    k3s_token                     = random_password.k3s_token.result
-    k3s_load_balancer_ip          = local.k3s_api_load_balancer_ip
-    k3s_cluster_setting           = "cluster-init: true"
-    etcd_s3_access_key            = var.etcd_s3_access_key
-    etcd_s3_secret_key            = var.etcd_s3_secret_key
-    etcd_s3_bucket                = var.etcd_s3_bucket
-    etcd_s3_endpoint              = var.etcd_s3_endpoint
-    network_gateway               = local.nat_server_ip
-    tailscale_auth_k3s_server_key = var.tailscale_auth_k3s_server_key
-    manifest_injector_script      = local.manifest_injector_script
+    hostname              = local.init_cp_name
+    node_private_ip       = local.cp_map[local.init_cp_name]
+    network_gateway       = local.nat_server_ip
+    kubernetes_api_lb_ip  = local.api_load_balancer_ip
+    kubeadm_token         = local.kubeadm_token
+    kubeadm_cert_key      = random_id.kubeadm_cert_key.hex
+    is_init_node          = true
+    tailscale_auth_cp_key = var.tailscale_auth_cp_key
+    git_repo_url          = var.git_repo_url
+    cilium_version        = var.cilium_version
+    hcloud_mtu            = var.hcloud_mtu
+    argocd_version        = var.argocd_version
+    hcloud_token          = var.token
+    hcloud_network_name   = hcloud_network.main.name
+    ccm_version           = var.ccm_version
+    csi_version           = var.csi_version
+    ingress_nginx_version = var.ingress_nginx_version
+    sealed_secrets_version = var.sealed_secrets_version
   })
 
   depends_on = [hcloud_network_route.default_route]
@@ -268,10 +256,10 @@ resource "hcloud_load_balancer_target" "api_target_init" {
 
 # --- PHASE 2: CONTROL PLANE JOIN (RECYCLE READY) ---
 resource "hcloud_server" "control_plane_join" {
-  for_each    = local.join_servers
+  for_each    = local.join_cps
   name        = each.key
-  image       = data.hcloud_image.k3s_node.id
-  server_type = var.k3s_server_type
+  image       = data.hcloud_image.k8s_node.id
+  server_type = var.cp_server_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
 
@@ -286,17 +274,24 @@ resource "hcloud_server" "control_plane_join" {
   }
 
   user_data = templatefile("${path.module}/templates/cloud-init-server.yaml", {
-    hostname                      = each.key
-    k3s_token                     = random_password.k3s_token.result
-    k3s_load_balancer_ip          = local.k3s_api_load_balancer_ip
-    k3s_cluster_setting           = "server: https://${local.k3s_api_load_balancer_ip}:6443"
-    etcd_s3_access_key            = var.etcd_s3_access_key
-    etcd_s3_secret_key            = var.etcd_s3_secret_key
-    etcd_s3_bucket                = var.etcd_s3_bucket
-    etcd_s3_endpoint              = var.etcd_s3_endpoint
-    network_gateway               = local.nat_server_ip
-    tailscale_auth_k3s_server_key = var.tailscale_auth_k3s_server_key
-    manifest_injector_script      = ""
+    hostname              = each.key
+    node_private_ip       = each.value
+    network_gateway       = local.nat_server_ip
+    kubernetes_api_lb_ip  = local.api_load_balancer_ip
+    kubeadm_token         = local.kubeadm_token
+    kubeadm_cert_key      = random_id.kubeadm_cert_key.hex
+    is_init_node          = false
+    tailscale_auth_cp_key = var.tailscale_auth_cp_key
+    git_repo_url          = var.git_repo_url
+    cilium_version        = var.cilium_version
+    hcloud_mtu            = var.hcloud_mtu
+    argocd_version        = var.argocd_version
+    hcloud_token          = var.token
+    hcloud_network_name   = hcloud_network.main.name
+    ccm_version           = var.ccm_version
+    csi_version           = var.csi_version
+    ingress_nginx_version = var.ingress_nginx_version
+    sealed_secrets_version = var.sealed_secrets_version
   })
 
   depends_on = [hcloud_server.control_plane_init]
@@ -310,12 +305,12 @@ resource "hcloud_load_balancer_target" "api_targets_join" {
   use_private_ip   = true
 }
 
-# --- PHASE 3: AGENTS (RECYCLE READY) ---
-resource "hcloud_server" "agent" {
-  for_each    = local.agent_map
+# --- PHASE 3: WORKERS (RECYCLE READY) ---
+resource "hcloud_server" "worker" {
+  for_each    = local.worker_map
   name        = each.key
-  image       = data.hcloud_image.k3s_node.id
-  server_type = var.k3s_agent_type
+  image       = data.hcloud_image.k8s_node.id
+  server_type = var.worker_server_type
   location    = var.location
   ssh_keys    = [data.hcloud_ssh_key.admin.id]
 
@@ -330,18 +325,18 @@ resource "hcloud_server" "agent" {
   }
 
   user_data = templatefile("${path.module}/templates/cloud-init-agent.yaml", {
-    hostname                     = each.key
-    k3s_token                    = random_password.k3s_token.result
-    k3s_control_plane_url        = "${local.k3s_api_load_balancer_ip}:6443"
-    tailscale_auth_k3s_agent_key = var.tailscale_auth_k3s_agent_key
-    network_gateway              = local.nat_server_ip
+    hostname                  = each.key
+    network_gateway           = local.nat_server_ip
+    kubernetes_api_lb_ip      = local.api_load_balancer_ip
+    kubeadm_token             = local.kubeadm_token
+    tailscale_auth_worker_key = var.tailscale_auth_worker_key
   })
 
   depends_on = [hcloud_server.control_plane_init]
 }
 
 resource "hcloud_load_balancer_target" "ingress_targets" {
-  for_each         = hcloud_server.agent
+  for_each         = hcloud_server.worker
   type             = "server"
   load_balancer_id = hcloud_load_balancer.ingress.id
   server_id        = each.value.id

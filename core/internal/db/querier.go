@@ -73,8 +73,6 @@ type Querier interface {
 	GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
 	GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMemberParams) (GetWorkspaceMemberRow, error)
-	GetWorkspaceUsageDetail(ctx context.Context, arg GetWorkspaceUsageDetailParams) ([]UsageRecord, error)
-	GetWorkspaceUsageSummary(ctx context.Context, arg GetWorkspaceUsageSummaryParams) ([]GetWorkspaceUsageSummaryRow, error)
 	GetWorkspacesForUser(ctx context.Context, userID uuid.UUID) ([]GetWorkspacesForUserRow, error)
 	InsertBuildLogBatch(ctx context.Context, arg []InsertBuildLogBatchParams) (int64, error)
 	// ============================================================================
@@ -94,18 +92,12 @@ type Querier interface {
 	// ============================================================================
 	// Atomic: creates user + personal workspace + owner membership in one transaction
 	OnboardUserWithWorkspace(ctx context.Context, arg OnboardUserWithWorkspaceParams) (uuid.UUID, error)
-	// ============================================================================
-	// USAGE / BILLING
-	// ============================================================================
-	RecordUsage(ctx context.Context, arg RecordUsageParams) error
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) (int64, error)
 	SoftDeleteDeployment(ctx context.Context, arg SoftDeleteDeploymentParams) (int64, error)
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) (Deployment, error)
 	UpdateDomainTLSStatus(ctx context.Context, arg UpdateDomainTLSStatusParams) (Domain, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
-	UpdateUserStripeCustomerID(ctx context.Context, arg UpdateUserStripeCustomerIDParams) (User, error)
-	UpdateUserTier(ctx context.Context, arg UpdateUserTierParams) (User, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 	UpdateWorkspaceMemberRole(ctx context.Context, arg UpdateWorkspaceMemberRoleParams) (int64, error)
 	// ============================================================================

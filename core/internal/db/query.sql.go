@@ -1019,91 +1019,6 @@ func (q *Queries) GetWorkspaceMember(ctx context.Context, arg GetWorkspaceMember
 	return i, err
 }
 
-const getWorkspaceUsageDetail = `-- name: GetWorkspaceUsageDetail :many
-SELECT id, workspace_id, metric, quantity, period_start, period_end, created_at FROM usage_records
-WHERE workspace_id = $1 AND metric = $2 AND period_start >= $3
-ORDER BY period_start DESC
-LIMIT $4
-`
-
-type GetWorkspaceUsageDetailParams struct {
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	Metric      string      `json:"metric"`
-	PeriodStart pgtype.Date `json:"period_start"`
-	Limit       int32       `json:"limit"`
-}
-
-func (q *Queries) GetWorkspaceUsageDetail(ctx context.Context, arg GetWorkspaceUsageDetailParams) ([]UsageRecord, error) {
-	rows, err := q.db.Query(ctx, getWorkspaceUsageDetail,
-		arg.WorkspaceID,
-		arg.Metric,
-		arg.PeriodStart,
-		arg.Limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UsageRecord
-	for rows.Next() {
-		var i UsageRecord
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.Metric,
-			&i.Quantity,
-			&i.PeriodStart,
-			&i.PeriodEnd,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getWorkspaceUsageSummary = `-- name: GetWorkspaceUsageSummary :many
-SELECT metric, SUM(quantity) AS total
-FROM usage_records
-WHERE workspace_id = $1 AND period_start >= $2 AND period_end <= $3
-GROUP BY metric
-`
-
-type GetWorkspaceUsageSummaryParams struct {
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	PeriodStart pgtype.Date `json:"period_start"`
-	PeriodEnd   pgtype.Date `json:"period_end"`
-}
-
-type GetWorkspaceUsageSummaryRow struct {
-	Metric string `json:"metric"`
-	Total  int64  `json:"total"`
-}
-
-func (q *Queries) GetWorkspaceUsageSummary(ctx context.Context, arg GetWorkspaceUsageSummaryParams) ([]GetWorkspaceUsageSummaryRow, error) {
-	rows, err := q.db.Query(ctx, getWorkspaceUsageSummary, arg.WorkspaceID, arg.PeriodStart, arg.PeriodEnd)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetWorkspaceUsageSummaryRow
-	for rows.Next() {
-		var i GetWorkspaceUsageSummaryRow
-		if err := rows.Scan(&i.Metric, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getWorkspacesForUser = `-- name: GetWorkspacesForUser :many
 SELECT w.id, w.name, w.slug, w.stripe_subscription_id, w.created_at, w.updated_at, w.deleted_at, wm.role FROM workspaces w
 JOIN workspace_members wm ON w.id = wm.workspace_id
@@ -1662,36 +1577,6 @@ func (q *Queries) OnboardUserWithWorkspace(ctx context.Context, arg OnboardUserW
 	return workspace_id, err
 }
 
-const recordUsage = `-- name: RecordUsage :exec
-
-INSERT INTO usage_records (id, workspace_id, metric, quantity, period_start, period_end)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type RecordUsageParams struct {
-	ID          uuid.UUID      `json:"id"`
-	WorkspaceID uuid.UUID      `json:"workspace_id"`
-	Metric      string         `json:"metric"`
-	Quantity    pgtype.Numeric `json:"quantity"`
-	PeriodStart pgtype.Date    `json:"period_start"`
-	PeriodEnd   pgtype.Date    `json:"period_end"`
-}
-
-// ============================================================================
-// USAGE / BILLING
-// ============================================================================
-func (q *Queries) RecordUsage(ctx context.Context, arg RecordUsageParams) error {
-	_, err := q.db.Exec(ctx, recordUsage,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.Metric,
-		arg.Quantity,
-		arg.PeriodStart,
-		arg.PeriodEnd,
-	)
-	return err
-}
-
 const removeWorkspaceMember = `-- name: RemoveWorkspaceMember :execrows
 DELETE FROM workspace_members
 WHERE workspace_members.workspace_id = $1 AND workspace_members.user_id = $2
@@ -1891,58 +1776,6 @@ type UpdateUserProfileParams struct {
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.Name, arg.AvatarUrl)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.Name,
-		&i.AvatarUrl,
-		&i.StripeCustomerID,
-		&i.Tier,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const updateUserStripeCustomerID = `-- name: UpdateUserStripeCustomerID :one
-UPDATE users SET stripe_customer_id = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at, deleted_at
-`
-
-type UpdateUserStripeCustomerIDParams struct {
-	ID               uuid.UUID   `json:"id"`
-	StripeCustomerID pgtype.Text `json:"stripe_customer_id"`
-}
-
-func (q *Queries) UpdateUserStripeCustomerID(ctx context.Context, arg UpdateUserStripeCustomerIDParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserStripeCustomerID, arg.ID, arg.StripeCustomerID)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Email,
-		&i.Name,
-		&i.AvatarUrl,
-		&i.StripeCustomerID,
-		&i.Tier,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const updateUserTier = `-- name: UpdateUserTier :one
-UPDATE users SET tier = $2 WHERE id = $1 RETURNING id, email, name, avatar_url, stripe_customer_id, tier, created_at, updated_at, deleted_at
-`
-
-type UpdateUserTierParams struct {
-	ID   uuid.UUID `json:"id"`
-	Tier string    `json:"tier"`
-}
-
-func (q *Queries) UpdateUserTier(ctx context.Context, arg UpdateUserTierParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserTier, arg.ID, arg.Tier)
 	var i User
 	err := row.Scan(
 		&i.ID,

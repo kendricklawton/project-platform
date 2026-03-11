@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  labels:
+    platform.io/managed-by: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: default
+  source:
+    repoURL: "https://grafana.github.io/helm-charts"
+    chart: grafana
+    targetRevision: "7.3.0"
+    helm:
+      values: |
+        adminPassword: ""   # set via SealedSecret — this value is ignored
+        envFromSecret: grafana-admin-secret
+        grafana.ini:
+          server:
+            root_url: "%(protocol)s://%(domain)s/"
+          auth.anonymous:
+            enabled: false
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: VictoriaMetrics
+                type: prometheus
+                url: http://vmsingle-victoria-metrics.observability.svc.cluster.local:8428
+                access: proxy
+                isDefault: true
+              - name: Loki
+                type: loki
+                url: http://loki.observability.svc.cluster.local:3100
+                access: proxy
+        persistence:
+          enabled: true
+          size: 2Gi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 472
+          fsGroup: 472
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

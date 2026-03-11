@@ -7,44 +7,30 @@ vars:
   PLATFORM_DATABASE_URL: "{{.PLATFORM_DATABASE_URL}}"
 
   # SHARED COMPONENT VERSIONS
-  K3S_VERSION: "v1.29.1+k3s2"
-  CILIUM_VERSION: "1.15.1"
+  KUBERNETES_VERSION: "v1.32.3"
+  CILIUM_VERSION: "1.17.1"
   INGRESS_NGINX_VERSION: "4.14.3"
   SEALED_SECRETS_VERSION: "2.18.1"
   CERT_MANAGER_VERSION: "v1.14.0"
-  NATS_VERSION: "2.10.12"
-  KUBEARMOR_VERSION: "1.3.1"
-  KYVERNO_VERSION: "3.2.6"
+  ARGOCD_VERSION: "7.8.23"
   FLUENT_BIT_VERSION: "3.0.0"
   VM_VERSION: "0.14.0"
   LOKI_VERSION: "5.43.3"
   GRAFANA_VERSION: "7.3.0"
-  ARGOCD_VERSION: "6.7.11"
-  KNATIVE_VERSION: "1.14.0"
 
 # --- INFRASTRUCTURE NAMESPACES ---
 includes:
   hz:
     taskfile: ./Taskfile.hz.yml
     dir: .
+  do:
+    taskfile: ./Taskfile.do.yml
+    dir: .
 
 tasks:
   # ===========================================================================
   # DEVELOPMENT & CODE GENERATION
   # ===========================================================================
-  proto:gen:
-    desc: "Generate high-speed ConnectRPC Go and Rust code from Protobuf"
-    dir: proto
-    cmds:
-      - go run github.com/bufbuild/buf/cmd/buf@latest generate
-      - echo "✅ Code generation complete in gen/"
-
-  proto:lint:
-    desc: "Lint the Protobuf contracts"
-    dir: proto
-    cmds:
-      - go run github.com/bufbuild/buf/cmd/buf@latest lint
-
   db:up:
     desc: "Start local PostgreSQL database"
     cmds:
@@ -116,78 +102,14 @@ tasks:
         tailwindcss -i ./internal/web/ui/static/input.css -o ./internal/web/ui/static/styles.css --watch &
         go run github.com/air-verse/air@latest -c .air.web.toml
 
-  dev:cli:
-    desc: "Build and run the plat CLI (usage: task dev:cli -- <args>)"
+  dev:worker:
+    desc: "Run the Background Build Worker locally"
     dir: core
     cmds:
-      - go run ./cmd/platform-cli/main.go {{.CLI_ARGS}}
+      - go run github.com/air-verse/air@latest -c .air.worker.toml
 
   dev:
     desc: "Run all services locally with live-reload (Air)"
     deps:
       - dev:server
       - dev:web
-
-  # ===========================================================================
-  # RUST CRATES — LOCAL DEV (T480 / Linux)
-  # ===========================================================================
-  dev:metal-daemon:
-    desc: "Run metal-daemon locally (requires NATS running + Linux for TAP/FC)"
-    dir: metal-daemon
-    env:
-      NATS_URL: "nats://127.0.0.1:4222"
-      RUST_LOG: "metal_daemon=debug"
-    cmds:
-      - cargo run
-
-  dev:edge-proxy:
-    desc: "Run edge-proxy locally (requires Postgres running)"
-    dir: edge-proxy
-    env:
-      DATABASE_URL: "{{.PLATFORM_DATABASE_URL}}"
-      CLOUD_UPSTREAM: "127.0.0.1:8080"
-      BIND_ADDR: "0.0.0.0:8081"
-      RUST_LOG: "edge_proxy=debug"
-    cmds:
-      - cargo run
-
-  nats:up:
-    desc: "Start local NATS server with JetStream"
-    cmds:
-      - docker compose up -d nats
-
-  nats:down:
-    desc: "Stop local NATS server"
-    cmds:
-      - docker compose stop nats
-
-  # One-time setup for T480 / any Linux dev machine.
-  # Run once as root (or with sudo) before using dev:metal-daemon.
-  metal:setup:
-    desc: "T480 one-time setup: br0 bridge, /run/firecracker, Firecracker binary + kernel"
-    cmds:
-      - mkdir -p /run/firecracker
-      - ip link add br0 type bridge 2>/dev/null || true
-      - ip link set br0 up
-      - ip addr add 172.20.0.1/24 dev br0 2>/dev/null || true
-      - |
-        if [ ! -f /usr/local/bin/firecracker ]; then
-          echo "Downloading Firecracker v1.9.0..."
-          curl -L -o /tmp/firecracker.tgz \
-            https://github.com/firecracker-microvm/firecracker/releases/download/v1.9.0/firecracker-v1.9.0-x86_64.tgz
-          tar -xzf /tmp/firecracker.tgz -C /tmp/
-          mv /tmp/release-v1.9.0-x86_64/firecracker-v1.9.0-x86_64 /usr/local/bin/firecracker
-          chmod +x /usr/local/bin/firecracker
-          echo "✅ Firecracker installed"
-        else
-          echo "✅ Firecracker already installed"
-        fi
-      - |
-        if [ ! -f /opt/firecracker/vmlinux ]; then
-          echo "⚠️  No kernel at /opt/firecracker/vmlinux"
-          echo "   Download a guest kernel from Firecracker's getting-started guide:"
-          echo "   https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md"
-          echo "   Place the vmlinux file at: /opt/firecracker/vmlinux"
-        else
-          echo "✅ Guest kernel present"
-        fi

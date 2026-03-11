@@ -1,0 +1,134 @@
+version: "3"
+
+vars:
+  PACKER_DIR: "infrastructure/packer"
+
+  # DigitalOcean Droplet sizes (slug format)
+  DO_K8S_SIZE: "s-2vcpu-4gb"
+  DO_LB_TYPE: "lb-small"
+  DO_CP_SIZE: "s-2vcpu-4gb"
+  DO_WORKER_SIZE: "s-2vcpu-4gb"
+  DO_NAT_TYPE: "s-1vcpu-1gb"
+
+  # DigitalOcean addon versions
+  DO_CCM_VERSION: "0.1.58"
+  DO_CSI_VERSION: "4.8.0"
+
+tasks:
+  _packer_build:
+    internal: true
+    silent: true
+    desc: "Generic DO Packer Build Wrapper"
+    dir: "{{.ROOT_DIR}}/{{.PACKER_DIR}}"
+    env:
+      PKR_VAR_hcloud_token: ""           # required by plugin init even if unused
+      PKR_VAR_do_api_token: "{{.DOCLOUD_TOKEN}}"
+    cmds:
+      - packer init .
+      - >-
+        packer build {{.BUILD_ARGS}}
+        -var "kubernetes_version={{.KUBERNETES_VERSION}}"
+        -var "do_k8s_size={{.DO_K8S_SIZE}}"
+        -var "hcloud_k8s_type=cpx11"
+        -var "hcloud_nat_type=cpx11"
+        -var "hcloud_ubuntu_version=ubuntu-24.04"
+        .
+
+  packer:
+    desc: "Build DigitalOcean K8s node images (nyc3 + sfo3)"
+    cmds:
+      - task: _packer_build
+        vars: { BUILD_ARGS: "-only=do-k8s.digitalocean.* -parallel-builds=2" }
+
+  packer:nyc3:
+    desc: "Build DigitalOcean K8s node image for nyc3 only"
+    cmds:
+      - task: _packer_build
+        vars: { BUILD_ARGS: "-only=do-k8s.digitalocean.k8s_nyc3" }
+
+  packer:sfo3:
+    desc: "Build DigitalOcean K8s node image for sfo3 only"
+    cmds:
+      - task: _packer_build
+        vars: { BUILD_ARGS: "-only=do-k8s.digitalocean.k8s_sfo3" }
+
+  _tf:
+    internal: true
+    dir: "{{.ROOT_DIR}}/infrastructure/terraform/providers/digitalocean"
+    vars:
+      TFSTATE_BUCKET: "{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}"
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: "{{.ROOT_DIR}}/keys/{{.PROJECT_NAME}}-tfstate-{{.CLOUD_ENV}}.json"
+      DIGITALOCEAN_TOKEN: "{{.DOCLOUD_TOKEN}}"
+      TF_VAR_token: "{{.DOCLOUD_TOKEN}}"
+      TF_VAR_env: "{{.CLOUD_ENV}}"
+      TF_VAR_region: "{{.LOCATION}}"
+      TF_VAR_git_repo_url: "{{.GIT_REPO_URL}}"
+      TF_VAR_ssh_key_name: "{{.DO_SSH_KEY_NAME}}"
+      TF_VAR_cp_server_type: "{{.DO_CP_SIZE}}"
+      TF_VAR_worker_server_type: "{{.DO_WORKER_SIZE}}"
+      TF_VAR_load_balancer_type: "{{.DO_LB_TYPE}}"
+      TF_VAR_tailscale_auth_nat_key: "{{.TAILSCALE_AUTH_NAT_KEY}}"
+      TF_VAR_tailscale_auth_cp_key: "{{.TAILSCALE_AUTH_CP_KEY}}"
+      TF_VAR_tailscale_auth_worker_key: "{{.TAILSCALE_AUTH_WORKER_KEY}}"
+      TF_VAR_nat_gateway_type: "{{.DO_NAT_TYPE}}"
+      TF_VAR_kubernetes_version: "{{.KUBERNETES_VERSION}}"
+      TF_VAR_cilium_version: "{{.CILIUM_VERSION}}"
+      TF_VAR_argocd_version: "{{.ARGOCD_VERSION}}"
+      TF_VAR_sealed_secrets_version: "{{.SEALED_SECRETS_VERSION}}"
+      TF_VAR_ccm_version: "{{.DO_CCM_VERSION}}"
+      TF_VAR_csi_version: "{{.DO_CSI_VERSION}}"
+      TF_VAR_ingress_nginx_version: "{{.INGRESS_NGINX_VERSION}}"
+    cmds:
+      - echo "[TERRAFORM] {{.CMD}} -> digitalocean -> {{.LOCATION}} -> {{.CLOUD_ENV}}"
+      - terraform init -reconfigure -backend-config="bucket={{.TFSTATE_BUCKET}}" -backend-config="prefix=digitalocean"
+      - terraform {{.CMD}} {{.ARGS}}
+
+  plan:
+    desc: "Plan DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars: { LOCATION: "nyc3", CLOUD_ENV: "dev", CMD: "plan", ARGS: "-out=tfplan" }
+
+  apply:
+    desc: "Apply DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars: { LOCATION: "nyc3", CLOUD_ENV: "dev", CMD: "apply", ARGS: "-auto-approve tfplan" }
+
+  destroy:
+    desc: "Destroy DigitalOcean NYC3 (Dev)"
+    cmds:
+      - task: _tf
+        vars: { LOCATION: "nyc3", CLOUD_ENV: "dev", CMD: "destroy", ARGS: "-auto-approve" }
+
+  output:
+    desc: "Show DigitalOcean Terraform outputs"
+    cmds:
+      - task: _tf
+        vars: { LOCATION: "nyc3", CLOUD_ENV: "dev", CMD: "output", ARGS: "" }
+
+  cluster:seal:
+    desc: "Create and seal a secret via SSH on the DO cluster"
+    requires:
+      vars: [TENANT, NAME, KEY, VAL]
+    vars:
+      CP_HOSTNAME:
+        sh: cd infrastructure/terraform/providers/digitalocean && terraform output -raw control_plane_init_hostname
+    cmds:
+      - mkdir -p tenants/{{.TENANT}}
+      - >-
+        ssh root@{{.CP_HOSTNAME}} "
+        export KUBECONFIG=/etc/kubernetes/admin.conf;
+
+        if ! command -v kubeseal >/dev/null 2>&1; then
+          wget -qO kubeseal.tar.gz https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.27.1/kubeseal-0.27.1-linux-amd64.tar.gz;
+          tar -xzf kubeseal.tar.gz kubeseal;
+          mv kubeseal /usr/local/bin/kubeseal;
+          rm kubeseal.tar.gz;
+        fi;
+
+        kubectl create secret generic {{.NAME}} -n {{.TENANT}} --from-literal={{.KEY}}='{{.VAL}}' --dry-run=client -o yaml |
+        kubeseal --controller-name=sealed-secrets --controller-namespace=kube-system -o yaml
+        " > tenants/{{.TENANT}}/{{.NAME}}-secret.yaml
+      - echo "Sealed secret saved locally to tenants/{{.TENANT}}/{{.NAME}}-secret.yaml"

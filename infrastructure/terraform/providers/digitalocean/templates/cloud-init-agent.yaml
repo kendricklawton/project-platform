@@ -4,20 +4,21 @@ manage_etc_hosts: true
 
 write_files:
   # NETPLAN CONFIGURATION
+  # eth0 = public interface, eth1 = VPC private interface
   - path: /etc/netplan/60-custom.yaml
     permissions: "0600"
     content: |
       network:
         version: 2
         ethernets:
-          enp7s0:
+          eth0:
             dhcp4: true
             nameservers:
               addresses: [1.1.1.1, 8.8.8.8]
-            routes:
-              - to: 0.0.0.0/0
-                via: 10.0.0.1
-                on-link: true
+          eth1:
+            dhcp4: true
+            dhcp4-overrides:
+              route-metric: 200
 
   # WORKER BOOTSTRAP SCRIPT
   - path: /usr/local/bin/kubeadm-bootstrap.sh
@@ -31,33 +32,28 @@ write_files:
       echo "=== K8s Worker Bootstrap Started at $(date) ==="
 
       # -------------------------------------------------------
-      # 1. SDN routing — default via NAT gateway
+      # 1. SDN routing — route outbound through NAT gateway on eth1
       # -------------------------------------------------------
-      echo "[Bootstrap] Ensuring SDN routing paths..."
-      DEFAULT_DEV=$(ip -4 route show to default | awk '{print $5}' | head -1)
-      if [ -n "$DEFAULT_DEV" ]; then
-        ip route replace default via ${network_gateway} dev "$DEFAULT_DEV" onlink || true
-      else
-        echo "[WARN] No default route device found, skipping route setup"
-      fi
+      echo "[Bootstrap] Setting default route via NAT gateway ${network_gateway}..."
+      ip route replace default via ${network_gateway} dev eth1 onlink || true
 
       # -------------------------------------------------------
-      # 2. Wait for Hetzner metadata service → get instance ID
+      # 3. Get DO droplet ID from metadata
       # -------------------------------------------------------
-      echo "[Bootstrap] Waiting for Hetzner metadata service..."
-      HCLOUD_ID=""
+      echo "[Bootstrap] Fetching DO droplet ID from metadata..."
+      DO_ID=""
       for i in $(seq 1 30); do
-        HCLOUD_ID=$(curl -sf -m 3 http://169.254.169.254/hetzner/v1/metadata/instance-id 2>/dev/null || true)
-        if [ -n "$HCLOUD_ID" ]; then
-          echo "[Bootstrap] Hetzner instance ID: $HCLOUD_ID"
+        DO_ID=$(curl -sf -m 3 http://169.254.169.254/metadata/v1/id 2>/dev/null || true)
+        if [ -n "$DO_ID" ]; then
+          echo "[Bootstrap] DO droplet ID: $DO_ID"
           break
         fi
-        [ "$i" -eq 30 ] && echo "[ERROR] Metadata service unreachable after 60s — proceeding without instance ID"
+        [ "$i" -eq 30 ] && echo "[ERROR] Metadata service unreachable"
         sleep 2
       done
 
       # -------------------------------------------------------
-      # 3. Wait for Tailscale IP
+      # 4. Wait for Tailscale IP
       # -------------------------------------------------------
       echo "[Bootstrap] Waiting for Tailscale IP..."
       TS_IP=""
@@ -73,7 +69,7 @@ write_files:
       [ -z "$TS_IP" ] && echo "[WARN] Tailscale IP not available"
 
       # -------------------------------------------------------
-      # 4. Wait for API server to be reachable
+      # 5. Wait for API server
       # -------------------------------------------------------
       echo "[Bootstrap] Waiting for API server at ${kubernetes_api_lb_ip}:6443..."
       for i in $(seq 1 60); do
@@ -86,7 +82,7 @@ write_files:
       done
 
       # -------------------------------------------------------
-      # 5. kubeadm JOIN (worker)
+      # 6. kubeadm JOIN (worker)
       # -------------------------------------------------------
       echo "[Bootstrap] Running kubeadm join (worker)..."
       kubeadm join "${kubernetes_api_lb_ip}:6443" \
@@ -97,7 +93,7 @@ write_files:
         --ignore-preflight-errors=NumCPU
 
       # -------------------------------------------------------
-      # 6. Verify kubelet is running
+      # 7. Verify kubelet is running
       # -------------------------------------------------------
       echo "[Bootstrap] Waiting for kubelet to stabilize..."
       sleep 15

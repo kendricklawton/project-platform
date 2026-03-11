@@ -25,10 +25,7 @@ func main() {
 		cfg.APIURL,
 		cfg.WebBaseURL,
 		cfg.InternalSecret,
-		cfg.WorkOSAPIKey,
-		cfg.WorkOSClientID,
-		cfg.WorkOSRedirectURI,
-		cfg.WorkOSCLIRedirectURI,
+		cfg.AdminPasswordHash,
 	)
 
 	addr := fmt.Sprintf(":%d", cfg.Port)

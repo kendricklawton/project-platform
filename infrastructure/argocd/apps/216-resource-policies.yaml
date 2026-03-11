@@ -1,0 +1,205 @@
+# =============================================================================
+# RESOURCE POLICIES — LimitRange + ResourceQuota
+# =============================================================================
+# LimitRange: sets default requests/limits for containers that don't specify
+#   their own. Prevents unbounded resource consumption.
+# ResourceQuota: caps total resource consumption per namespace.
+#   Prevents a single namespace from starving the cluster.
+#
+# CNPA/CNPE relevance: both are core topics. Exam scenarios include:
+#   - Why is a pod Pending? (quota exhausted)
+#   - Why did a pod get OOMKilled? (limit too low)
+#   - Why does admission fail? (LimitRange max exceeded)
+# =============================================================================
+
+
+# =============================================================================
+# project-platform — user workloads (Go/Rust APIs, sidecars)
+# =============================================================================
+
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: project-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "50m"
+        memory: "64Mi"
+      default:
+        cpu: "500m"
+        memory: "512Mi"
+      max:
+        cpu: "2"
+        memory: "2Gi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "20Gi"
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: project-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "4Gi"
+    limits.cpu: "8"
+    limits.memory: "8Gi"
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "10"
+    secrets: "30"
+    configmaps: "30"
+
+
+# =============================================================================
+# platform-system — core platform services (higher headroom for infra)
+# =============================================================================
+
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      default:
+        cpu: "1"
+        memory: "1Gi"
+      max:
+        cpu: "4"
+        memory: "4Gi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "50Gi"
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: "8Gi"
+    limits.cpu: "16"
+    limits.memory: "16Gi"
+    pods: "30"
+    services: "20"
+    persistentvolumeclaims: "20"
+    secrets: "50"
+    configmaps: "50"
+
+
+# =============================================================================
+# observability — Loki + VictoriaMetrics are memory-heavy
+# =============================================================================
+
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      default:
+        cpu: "1"
+        memory: "1Gi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "100Gi"
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+    pods: "20"
+    services: "10"
+    persistentvolumeclaims: "10"
+
+
+# =============================================================================
+# cnpg-system — PostgreSQL is memory-hungry; give it room
+# =============================================================================
+
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: cnpg-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: "100m"
+        memory: "256Mi"
+      default:
+        cpu: "2"
+        memory: "2Gi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+    - type: PersistentVolumeClaim
+      max:
+        storage: "100Gi"
+
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: namespace-quota
+  namespace: cnpg-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+    pods: "15"
+    services: "10"
+    persistentvolumeclaims: "15"

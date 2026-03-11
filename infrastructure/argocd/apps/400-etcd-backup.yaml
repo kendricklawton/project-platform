@@ -1,0 +1,131 @@
+# =============================================================================
+# ETCD BACKUP — CronJob
+# =============================================================================
+# Runs etcdctl snapshot save daily at 02:00 UTC on a control-plane node.
+# Retains the last 7 snapshots on the PVC (older ones are pruned automatically).
+#
+# How it works:
+#   - hostNetwork: true   → reaches etcd at 127.0.0.1:2379 (loopback)
+#   - hostPath volumes    → mounts etcd PKI certs from the node filesystem
+#   - nodeSelector        → schedules only on control-plane nodes
+#   - toleration          → allows scheduling despite the control-plane taint
+#
+# Manual backup (CKA exam pattern):
+#   etcdctl --endpoints=https://127.0.0.1:2379 \
+#     --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+#     --cert=/etc/kubernetes/pki/etcd/server.crt \
+#     --key=/etc/kubernetes/pki/etcd/server.key \
+#     snapshot save /tmp/etcd-backup.db
+#
+# Manual restore (CKA exam pattern):
+#   systemctl stop etcd
+#   etcdutl snapshot restore /tmp/etcd-backup.db --data-dir=/var/lib/etcd-restore
+#   # Update etcd static pod manifest to point to new data-dir, then restart
+#
+# CNPA/CNPE relevance: etcd backup/restore is a mandatory CKA topic.
+# Understanding cert paths, ETCDCTL_API=3, and snapshot status is tested.
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+
+---
+# PVC for storing snapshots — provisioned by the cloud CSI (DO or Hetzner)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: etcd-backup-pvc
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  schedule: "0 2 * * *"   # daily at 02:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: etcd-backup
+          hostNetwork: true          # required to reach etcd at 127.0.0.1:2379
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          restartPolicy: OnFailure
+          containers:
+            - name: etcd-backup
+              # Use the same etcd image that kubeadm deploys (k8s 1.32 → etcd 3.5.16)
+              image: registry.k8s.io/etcd:3.5.16-0
+              env:
+                - name: ETCDCTL_API
+                  value: "3"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  BACKUP_FILE="/backup/etcd-snapshot-${TIMESTAMP}.db"
+
+                  echo "[etcd-backup] Starting snapshot at $(date)"
+                  etcdctl \
+                    --endpoints=https://127.0.0.1:2379 \
+                    --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+                    --cert=/etc/kubernetes/pki/etcd/server.crt \
+                    --key=/etc/kubernetes/pki/etcd/server.key \
+                    snapshot save "${BACKUP_FILE}"
+
+                  echo "[etcd-backup] Verifying snapshot:"
+                  etcdctl snapshot status "${BACKUP_FILE}" --write-out=table
+
+                  echo "[etcd-backup] Pruning old snapshots (keeping last 7):"
+                  ls -t /backup/etcd-snapshot-*.db | tail -n +8 | xargs -r rm -fv
+
+                  echo "[etcd-backup] Done at $(date)"
+              volumeMounts:
+                - name: etcd-certs
+                  mountPath: /etc/kubernetes/pki/etcd
+                  readOnly: true
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "256Mi"
+          volumes:
+            - name: etcd-certs
+              hostPath:
+                path: /etc/kubernetes/pki/etcd
+                type: Directory
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: etcd-backup-pvc

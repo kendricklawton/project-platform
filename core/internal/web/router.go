@@ -24,7 +24,7 @@ func (h *Handler) Routes() chi.Router {
 	// Authentication flow — must be full page navigations, never HTMX
 	router.Route("/auth", func(auth chi.Router) {
 		auth.Get("/login", h.AuthLogin)
-		auth.Get("/callback", h.AuthCallback)
+		auth.Post("/login", h.AuthLogin)
 		auth.Get("/logout", h.AuthLogout)
 		auth.Post("/logout", h.AuthLogout)
 	})
