@@ -1,0 +1,65 @@
+# =============================================================================
+# RUSTFS TO GCS SYNC — CronJob
+# =============================================================================
+# Syncs object storage data from internal RustFS to Google Cloud Storage.
+# Runs daily at 02:00 UTC (during typical low-traffic periods).
+# =============================================================================
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rustfs-gcs-backup
+  namespace: platform-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  schedule: "0 2 * * *" # 02:00 UTC daily
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: rclone-sync
+              image: rclone/rclone:1.65
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  echo "[rustfs-backup] Starting Sync to GCS at $(date)"
+
+                  # The 'sync' command makes the destination exactly match the source.
+                  # It will upload new files and delete files in GCS that were deleted in RustFS.
+                  rclone sync local-rustfs:your-data-bucket gcp-backup:your-gcs-backup-bucket \
+                    --config /etc/rclone/rclone.conf \
+                    --progress \
+                    --transfers 4 \
+                    --checkers 8 \
+                    --fast-list
+
+                  echo "[rustfs-backup] Sync complete at $(date)"
+              volumeMounts:
+                - name: rclone-config
+                  mountPath: /etc/rclone
+                  readOnly: true
+                - name: gcp-credentials
+                  mountPath: /etc/gcp
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+          volumes:
+            - name: rclone-config
+              secret:
+                secretName: rclone-config-secret
+            - name: gcp-credentials
+              secret:
+                secretName: gcp-service-account-secret
